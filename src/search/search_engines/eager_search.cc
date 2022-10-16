@@ -487,9 +487,44 @@ namespace eager_search
             fact_amount += task_proxy.get_variables()[varorder[i]].get_domain_size();
         }
 
+        std::ofstream proof_file;
+        proof_file.open(unsolvability_directory + "satproof.txt");
+
+        // certificate should represent complement of all reachable states
+        //-> includes the complement of all states reached -> CNF
+        for (StateID id : state_registry)
+        {
+            State state = state_registry.lookup_state(id);
+            EvaluationContext eval_context(state,
+                                           0,
+                                           false, &statistics);
+            // loop over all variables and append them to file
+            //  print state
+            state.unpack();
+            for (size_t i = 0; i < varorder.size(); ++i)
+            {
+                int var = varorder[i];
+                int val = state.get_unpacked_values()[i];
+                // add complement of state
+                if (val == 1)
+                {
+                    proof_file << -(var + 1) << " ";
+                }
+                else if (val == 0)
+                {
+                    proof_file << (var + 1) << " ";
+                }
+            }
+            proof_file << "0 \n";
+        }
+
+        std::cout << "done writing SAT-proof" << std::endl;
+
+        /*
         for (StateID id : state_registry)
         {
             const State &state = state_registry.lookup_state(id);
+
             CuddBDD statebdd = CuddBDD(&manager, state);
             if (search_space.get_node(state).is_dead_end())
             {
@@ -537,6 +572,7 @@ namespace eager_search
                 expanded.lor(statebdd);
             }
             // TODO: this point of the code should never be reached, right? (either its a dead-end or closed)
+
         }
 
         std::vector<CuddBDD> bdds;
@@ -606,6 +642,7 @@ namespace eager_search
         unsolvmgr.dump_BDDs();
 
         std::cout << "done dumping bdds" << std::endl;
+        */
 
         /*
           Writing the task file at the end minimizes the chances that both task and
