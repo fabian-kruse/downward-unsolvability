@@ -12,3 +12,5 @@ __pycache__/
 /experiments/issue*/data/
 /misc/.tox/
 /misc/autodoc/downward-xmlrpc.secret
+/satproof.txt
+.vscode/*
