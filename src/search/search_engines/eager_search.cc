@@ -506,6 +506,8 @@ namespace eager_search
                 int var = varorder[i];
                 int val = state.get_unpacked_values()[i];
                 // add complement of state
+
+                // variables start at 1 for dimacs format
                 if (val == 1)
                 {
                     proof_file << -(var + 1) << " ";
@@ -672,7 +674,6 @@ namespace eager_search
 
         std::ofstream task_file;
         task_file.open(unsolvability_directory + "task.txt");
-        // this is just a test
         task_file << "begin_atoms:" << fact_amount << "\n";
         for (size_t i = 0; i < varorder.size(); ++i)
         {
@@ -685,20 +686,22 @@ namespace eager_search
         task_file << "end_atoms\n";
 
         task_file << "begin_init\n";
+        // variables start at 1 for dimacs format
         for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
         {
-            task_file << fact_to_var[i][task_proxy.get_initial_state()[i].get_value()] << "\n";
+            task_file << fact_to_var[i][task_proxy.get_initial_state()[i].get_value()] + 1 << "\n";
         }
         task_file << "end_init\n";
 
+        // variables start at 1 for dimacs format
         task_file << "begin_goal\n";
         for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
         {
             FactProxy f = task_proxy.get_goals()[i];
-            task_file << fact_to_var[f.get_variable().get_id()][f.get_value()] << "\n";
+            task_file << fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 << "\n";
         }
         task_file << "end_goal\n";
-
+        // variables start at 1 for dimacs format
         task_file << "begin_actions:" << task_proxy.get_operators().size() << "\n";
         for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
         {
@@ -712,7 +715,7 @@ namespace eager_search
 
             for (size_t i = 0; i < pre.size(); ++i)
             {
-                task_file << "PRE:" << fact_to_var[pre[i].get_variable().get_id()][pre[i].get_value()] << "\n";
+                task_file << "PRE:" << fact_to_var[pre[i].get_variable().get_id()][pre[i].get_value() + 1] << "\n";
             }
             for (size_t i = 0; i < post.size(); ++i)
             {
@@ -724,7 +727,7 @@ namespace eager_search
                     utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
                 }
                 FactProxy f = post[i].get_fact();
-                task_file << "ADD:" << fact_to_var[f.get_variable().get_id()][f.get_value()] << "\n";
+                task_file << "ADD:" << fact_to_var[f.get_variable().get_id()][f.get_value() + 1] << "\n";
                 // all other facts from this FDR variable are set to false
                 // TODO: can we make this more compact / smarter?
                 for (int j = 0; j < f.get_variable().get_domain_size(); j++)
@@ -733,7 +736,7 @@ namespace eager_search
                     {
                         continue;
                     }
-                    task_file << "DEL:" << fact_to_var[f.get_variable().get_id()][j] << "\n";
+                    task_file << "DEL:" << fact_to_var[f.get_variable().get_id()][j] + 1 << "\n";
                 }
             }
             task_file << "end_action\n";
