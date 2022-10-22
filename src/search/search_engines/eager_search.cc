@@ -476,22 +476,43 @@ namespace eager_search
             merge_tree.resize(ceil(log2(dead_end_amount + 1)));
         }
         // mt_pos is the index of the first unused entry of merge_tree
-        int mt_pos = 0;
+        // int mt_pos = 0;
 
         CuddBDD expanded = CuddBDD(&manager, false);
         CuddBDD dead = CuddBDD(&manager, false);
 
+        std::vector<std::vector<int>> fact_to_var(varorder.size(), std::vector<int>());
         int fact_amount = 0;
         for (size_t i = 0; i < varorder.size(); ++i)
         {
-            fact_amount += task_proxy.get_variables()[varorder[i]].get_domain_size();
+            int var = varorder[i];
+            fact_to_var[var].resize(task_proxy.get_variables()[var].get_domain_size());
+            for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+            {
+                fact_to_var[var][j] = fact_amount++;
+            }
         }
 
-        std::ofstream proof_file;
-        proof_file.open(unsolvability_directory + "satproof.txt");
+        // create new directory for sat-certificates
+
+        // TODO:include directory
+        std::ofstream main_proof_file;
+        std::ofstream init_proof_file;
+        // const std::string dir = "/satcertificates"
+        const std::string dir = "";
+        // std::experimental::filesystem::create_directory(unsolvability_directory + "/satcertificates");
+        main_proof_file.open(unsolvability_directory + dir + "mainproof.txt");
+        main_proof_file << "c main proof file\n"
+                           "c this file contains the backwards inductive certificate\n"
+                           "c the file initproof contains the the proof that the inital state is dead\n"
+                           "c the files goalproof_i contain the proofs that the goal states are not reachable\n"
+                           "c the files inductiveproof_i contain the proofs that the certificate is inductive\n"
+                           "p cnf " +
+                               std::to_string(fact_amount) + " " + std::to_string(state_registry.size()) + "\n";
 
         // certificate should represent complement of all reachable states
-        //-> includes the complement of all states reached -> CNF
+        //-> includes the complement of all states reached -> CNF of all states reached
+
         for (StateID id : state_registry)
         {
             State state = state_registry.lookup_state(id);
@@ -501,24 +522,27 @@ namespace eager_search
             // loop over all variables and append them to file
             //  print state
             state.unpack();
+            std::vector<int> vals = state.get_unpacked_values();
             for (size_t i = 0; i < varorder.size(); ++i)
             {
-                int var = varorder[i];
-                int val = state.get_unpacked_values()[i];
                 // add complement of state
-
                 // variables start at 1 for dimacs format
-                if (val == 1)
+                int var = varorder[i];
+                for (size_t j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                 {
-                    proof_file << -(var + 1) << " ";
-                }
-                else if (val == 0)
-                {
-                    proof_file << (var + 1) << " ";
+                    if (vals[i] == j)
+                    {
+                        main_proof_file << -(fact_to_var[var][j] + 1) << " ";
+                    }
+                    else
+                    {
+                        main_proof_file << (fact_to_var[var][j] + 1) << " ";
+                    }
                 }
             }
-            proof_file << "0 \n";
+            main_proof_file << "0 \n";
         }
+        main_proof_file.close();
 
         std::cout << "done writing SAT-proof" << std::endl;
 
@@ -715,7 +739,7 @@ namespace eager_search
 
             for (size_t i = 0; i < pre.size(); ++i)
             {
-                task_file << "PRE:" << fact_to_var[pre[i].get_variable().get_id()][pre[i].get_value() + 1] << "\n";
+                task_file << "PRE:" << fact_to_var[pre[i].get_variable().get_id()][pre[i].get_value()] + 1 << "\n";
             }
             for (size_t i = 0; i < post.size(); ++i)
             {
@@ -727,7 +751,7 @@ namespace eager_search
                     utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
                 }
                 FactProxy f = post[i].get_fact();
-                task_file << "ADD:" << fact_to_var[f.get_variable().get_id()][f.get_value() + 1] << "\n";
+                task_file << "ADD:" << fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 << "\n";
                 // all other facts from this FDR variable are set to false
                 // TODO: can we make this more compact / smarter?
                 for (int j = 0; j < f.get_variable().get_domain_size(); j++)
@@ -744,5 +768,4 @@ namespace eager_search
         task_file << "end_actions\n";
         task_file.close();
     }
-
 }
