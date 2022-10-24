@@ -540,7 +540,7 @@ namespace eager_search
                     }
                 }
             }
-            main_proof_file << "0 \n";
+            main_proof_file << "0\n";
         }
         main_proof_file.close();
 
