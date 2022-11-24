@@ -482,6 +482,7 @@ namespace eager_search
         CuddBDD dead = CuddBDD(&manager, false);
 
         std::vector<std::vector<int>> fact_to_var(varorder.size(), std::vector<int>());
+        std::vector<bool> used_vars_in_operator;
         int fact_amount = 0;
         for (size_t i = 0; i < varorder.size(); ++i)
         {
@@ -490,59 +491,315 @@ namespace eager_search
             for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
             {
                 fact_to_var[var][j] = fact_amount++;
+                used_vars_in_operator.push_back(false);
             }
         }
 
-        // create new directory for sat-certificates
+        bool whole_formula = true;
 
-        // TODO:include directory
-        std::ofstream main_proof_file;
-        std::ofstream init_proof_file;
-        // const std::string dir = "/satcertificates"
-        const std::string dir = "";
-        // std::experimental::filesystem::create_directory(unsolvability_directory + "/satcertificates");
-        main_proof_file.open(unsolvability_directory + dir + "mainproof.txt");
-        main_proof_file << "c main proof file\n"
-                           "c this file contains the backwards inductive certificate\n"
-                           "c the file initproof contains the the proof that the inital state is dead\n"
-                           "c the files goalproof_i contain the proofs that the goal states are not reachable\n"
-                           "c the files inductiveproof_i contain the proofs that the certificate is inductive\n"
-                           "p cnf " +
-                               std::to_string(fact_amount) + " " + std::to_string(state_registry.size()) + "\n";
-
-        // certificate should represent complement of all reachable states
-        //-> includes the complement of all states reached -> CNF of all states reached
-
-        for (StateID id : state_registry)
+        if (whole_formula)
         {
-            State state = state_registry.lookup_state(id);
-            EvaluationContext eval_context(state,
-                                           0,
-                                           false, &statistics);
-            // loop over all variables and append them to file
-            //  print state
-            state.unpack();
-            std::vector<int> vals = state.get_unpacked_values();
-            for (size_t i = 0; i < varorder.size(); ++i)
+            std::ofstream certificate;
+            certificate.open(unsolvability_directory + "wholeproof.txt");
+
+            // write compR formula
+            certificate << "BC1.1\ncompR := ";
+            certificate << "( ";
+            size_t state_counter = 0;
+            for (StateID id : state_registry)
             {
-                // add complement of state
-                // variables start at 1 for dimacs format
-                int var = varorder[i];
-                for (size_t j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                State state = state_registry.lookup_state(id);
+
+                EvaluationContext eval_context(state,
+                                               0,
+                                               false, &statistics);
+                state.unpack();
+                std::vector<int> vals = state.get_unpacked_values();
+                certificate << "(";
+                for (size_t i = 0; i < varorder.size(); ++i)
                 {
-                    if (vals[i] == j)
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                     {
-                        main_proof_file << -(fact_to_var[var][j] + 1) << " ";
+                        if (vals[i] == j)
+                        {
+                            certificate << "!v" + to_string((fact_to_var[var][j] + 1)) << " ";
+                        }
+                        else
+                        {
+                            certificate << "v" + to_string(fact_to_var[var][j] + 1) << " ";
+                        }
+                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                        {
+                            certificate << "| ";
+                        }
+                    }
+                    if (i != varorder.size() - 1)
+                    {
+                        certificate << "| ";
+                    }
+                }
+                certificate << ")";
+                state_counter++;
+                if (state_counter != state_registry.size())
+                {
+                    certificate << " & ";
+                }
+            }
+            certificate << ");\n";
+
+            // write compR' formula
+            certificate << "compR' := ";
+            certificate << "( ";
+            state_counter = 0;
+            for (StateID id : state_registry)
+            {
+                State state = state_registry.lookup_state(id);
+                EvaluationContext eval_context(state,
+                                               0,
+                                               false, &statistics);
+                state.unpack();
+                std::vector<int> vals = state.get_unpacked_values();
+
+                certificate << "(";
+                for (size_t i = 0; i < varorder.size(); ++i)
+                {
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    {
+                        if (vals[i] == j)
+                        {
+                            certificate << "!v" + to_string((fact_to_var[var][j] + 1 + fact_amount)) << " ";
+                        }
+                        else
+                        {
+                            certificate << "v" + to_string(fact_to_var[var][j] + 1 + fact_amount) << " ";
+                        }
+                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                        {
+                            certificate << "| ";
+                        }
+                    }
+                    if (i != varorder.size() - 1)
+                    {
+                        certificate << "| ";
+                    }
+                }
+                certificate << ")";
+                state_counter++;
+                if (state_counter != state_registry.size())
+                {
+                    certificate << " & ";
+                }
+            }
+            certificate << ");\n";
+
+            // write R formula
+            certificate << "R := ";
+            certificate << "( ";
+            state_counter = 0;
+            for (StateID id : state_registry)
+            {
+                State state = state_registry.lookup_state(id);
+                EvaluationContext eval_context(state,
+                                               0,
+                                               false, &statistics);
+                state.unpack();
+                std::vector<int> vals = state.get_unpacked_values();
+
+                certificate << "(";
+                for (size_t i = 0; i < varorder.size(); ++i)
+                {
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    {
+                        if (vals[i] == j)
+                        {
+                            certificate << "v" + to_string((fact_to_var[var][j] + 1)) << " ";
+                        }
+                        else
+                        {
+                            certificate << "!v" + to_string(fact_to_var[var][j] + 1) << " ";
+                        }
+                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                        {
+                            certificate << "& ";
+                        }
+                    }
+                    if (i != varorder.size() - 1)
+                    {
+                        certificate << "& ";
+                    }
+                }
+                certificate << ")";
+                state_counter++;
+                if (state_counter != state_registry.size())
+                {
+                    certificate << " | ";
+                }
+            }
+            certificate << ");\n";
+            // write initial state formula
+            certificate << "init := ( ";
+            for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
+            {
+                for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
+                {
+                    if (task_proxy.get_initial_state()[i].get_value() == j)
+                    {
+                        certificate << "v" + to_string((fact_to_var[i][j] + 1)) << " ";
                     }
                     else
                     {
-                        main_proof_file << (fact_to_var[var][j] + 1) << " ";
+                        certificate << "!v" + to_string(fact_to_var[i][j] + 1) << " ";
+                    }
+                    if (j != task_proxy.get_variables()[i].get_domain_size() - 1)
+                    {
+                        certificate << "& ";
                     }
                 }
+                if (i != task_proxy.get_variables().size() - 1)
+                {
+                    certificate << "& ";
+                }
             }
-            main_proof_file << "0\n";
+            certificate << ");\n";
+
+            // write goal formula
+            certificate << "goal := ( ";
+            for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
+            {
+                FactProxy f = task_proxy.get_goals()[i];
+                certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
+                if (i != task_proxy.get_goals().size() - 1)
+                {
+                    certificate << "& ";
+                }
+            }
+            certificate << ");\n";
+
+            // write transition formulas
+            for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
+            {
+                OperatorProxy op = task_proxy.get_operators()[op_index];
+                certificate << "tau_a" + to_string(op_index) + " := ( ";
+                PreconditionsProxy pre = op.get_preconditions();
+                EffectsProxy post = op.get_effects();
+
+                for (size_t i = 0; i < pre.size(); ++i)
+                {
+                    FactProxy f = pre[i];
+                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
+                    // task_file << "PRE:" << fact_to_var[pre[i].get_variable().get_id()][pre[i].get_value()] + 1 << "\n";
+                    certificate << "& ";
+                }
+                for (size_t i = 0; i < post.size(); ++i)
+                {
+                    if (!post[i].get_conditions().empty())
+                    {
+                        std::cout << "CONDITIONAL EFFECTS, ABORT!";
+                        certificate.close();
+                        std::remove("wholeproof.txt");
+                        utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
+                    }
+                    // add and del facts need to be primed -> add fact_amount
+                    FactProxy f = post[i].get_fact();
+                    // certificate << "ADD:" << fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 << "\n";
+                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " ";
+                    certificate << "& ";
+                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
+
+                    //  all other facts from this FDR variable are set to false
+                    //  TODO: can we make this more compact / smarter?
+                    for (int j = 0; j < f.get_variable().get_domain_size(); j++)
+                    {
+                        if (j == f.get_value())
+                        {
+                            continue;
+                        }
+                        // certificate << "DEL:" << fact_to_var[f.get_variable().get_id()][j] + 1 << "\n";
+                        certificate << "!v" + to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " ";
+                        certificate << "& ";
+                        used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
+                    }
+                }
+                // TODO:check if "&" is appended correctly
+                bool first = true;
+                for (size_t j = 0; j < used_vars_in_operator.size(); j++)
+                {
+                    if (used_vars_in_operator[j])
+                    {
+                        used_vars_in_operator[j] = false;
+                        continue;
+                    }
+                    if (!first)
+                    {
+                        certificate << "& ";
+                    }
+                    certificate << "(v" + to_string(j + 1 + fact_amount) + " == " + "v" + to_string(j + 1) + ") ";
+                    first = false;
+                }
+                certificate << ");\n";
+            }
+
+            // write whole formula
+            // notice: it is better to use !compR instead of R
+            certificate << "f := (compR & init) | (!compR & goal ) | (!compR & compR' & (";
+            for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
+            {
+                certificate << "tau_a" + to_string(op_index) + " ";
+                if (op_index != task_proxy.get_operators().size() - 1)
+                {
+                    certificate << "| ";
+                }
+            }
+            certificate << "));\n";
+            certificate << "ASSIGN f;";
         }
-        main_proof_file.close();
+        else
+        {
+            std::ofstream main_proof_file;
+            const std::string dir = "";
+            main_proof_file.open(unsolvability_directory + dir + "mainproof.txt");
+            main_proof_file << "c main proof file\n"
+                               "c this file contains the backwards inductive certificate\n"
+                               "p cnf " +
+                                   std::to_string(fact_amount) + " " + std::to_string(state_registry.size()) + "\n";
+
+            // certificate should represent complement of all reachable states
+            //-> includes the complement of all states reached -> CNF of all states reached
+
+            for (StateID id : state_registry)
+            {
+                State state = state_registry.lookup_state(id);
+                EvaluationContext eval_context(state,
+                                               0,
+                                               false, &statistics);
+                state.unpack();
+                std::vector<int> vals = state.get_unpacked_values();
+                for (size_t i = 0; i < varorder.size(); ++i)
+                {
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    {
+                        if (vals[i] == j)
+                        {
+                            main_proof_file << -(fact_to_var[var][j] + 1) << " ";
+                        }
+                        else
+                        {
+                            main_proof_file << (fact_to_var[var][j] + 1) << " ";
+                        }
+                    }
+                }
+                main_proof_file << "0\n";
+            }
+            main_proof_file.close();
+        }
 
         std::cout << "done writing SAT-proof" << std::endl;
 
