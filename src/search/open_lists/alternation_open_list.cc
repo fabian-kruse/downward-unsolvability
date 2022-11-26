@@ -14,177 +14,210 @@
 using namespace std;
 using utils::ExitCode;
 
-namespace alternation_open_list {
-template<class Entry>
-class AlternationOpenList : public OpenList<Entry> {
-    vector<unique_ptr<OpenList<Entry>>> open_lists;
-    vector<int> priorities;
+namespace alternation_open_list
+{
+    template <class Entry>
+    class AlternationOpenList : public OpenList<Entry>
+    {
+        vector<unique_ptr<OpenList<Entry>>> open_lists;
+        vector<int> priorities;
 
-    const int boost_amount;
-protected:
-    virtual void do_insertion(EvaluationContext &eval_context,
-                              const Entry &entry) override;
+        const int boost_amount;
 
-public:
-    explicit AlternationOpenList(const Options &opts);
-    virtual ~AlternationOpenList() override = default;
+    protected:
+        virtual void do_insertion(EvaluationContext &eval_context,
+                                  const Entry &entry) override;
 
-    virtual Entry remove_min() override;
-    virtual bool empty() const override;
-    virtual void clear() override;
-    virtual void boost_preferred() override;
-    virtual void get_path_dependent_evaluators(
-        set<Evaluator *> &evals) override;
-    virtual bool is_dead_end(
-        EvaluationContext &eval_context) const override;
-    virtual bool is_reliable_dead_end(
-        EvaluationContext &eval_context) const override;
+    public:
+        explicit AlternationOpenList(const Options &opts);
+        virtual ~AlternationOpenList() override = default;
 
-    virtual void store_deadend_info(EvaluationContext &eval_context) override;
-    virtual std::pair<SetExpression,Judgment> get_dead_end_justification(
+        virtual Entry remove_min() override;
+        virtual bool empty() const override;
+        virtual void clear() override;
+        virtual void boost_preferred() override;
+        virtual void get_path_dependent_evaluators(
+            set<Evaluator *> &evals) override;
+        virtual bool is_dead_end(
+            EvaluationContext &eval_context) const override;
+        virtual bool is_reliable_dead_end(
+            EvaluationContext &eval_context) const override;
+
+        virtual void store_deadend_info(EvaluationContext &eval_context) override;
+        virtual std::pair<SetExpression, Judgment> get_dead_end_justification(
             EvaluationContext &eval_context, UnsolvabilityManager &unsolvmanager) override;
-};
+        virtual std::vector<int> get_unreachable_variables_open_list(EvaluationContext &eval_context, State &state) override;
+    };
 
+    template <class Entry>
+    AlternationOpenList<Entry>::AlternationOpenList(const Options &opts)
+        : boost_amount(opts.get<int>("boost"))
+    {
+        vector<shared_ptr<OpenListFactory>> open_list_factories(
+            opts.get_list<shared_ptr<OpenListFactory>>("sublists"));
+        open_lists.reserve(open_list_factories.size());
+        for (const auto &factory : open_list_factories)
+            open_lists.push_back(factory->create_open_list<Entry>());
 
-template<class Entry>
-AlternationOpenList<Entry>::AlternationOpenList(const Options &opts)
-    : boost_amount(opts.get<int>("boost")) {
-    vector<shared_ptr<OpenListFactory>> open_list_factories(
-        opts.get_list<shared_ptr<OpenListFactory>>("sublists"));
-    open_lists.reserve(open_list_factories.size());
-    for (const auto &factory : open_list_factories)
-        open_lists.push_back(factory->create_open_list<Entry>());
-
-    priorities.resize(open_lists.size(), 0);
-}
-
-template<class Entry>
-void AlternationOpenList<Entry>::do_insertion(
-    EvaluationContext &eval_context, const Entry &entry) {
-    for (const auto &sublist : open_lists)
-        sublist->insert(eval_context, entry);
-}
-
-template<class Entry>
-Entry AlternationOpenList<Entry>::remove_min() {
-    int best = -1;
-    for (size_t i = 0; i < open_lists.size(); ++i) {
-        if (!open_lists[i]->empty() &&
-            (best == -1 || priorities[i] < priorities[best])) {
-            best = i;
-        }
+        priorities.resize(open_lists.size(), 0);
     }
-    assert(best != -1);
-    const auto &best_list = open_lists[best];
-    assert(!best_list->empty());
-    ++priorities[best];
-    return best_list->remove_min();
-}
 
-template<class Entry>
-bool AlternationOpenList<Entry>::empty() const {
-    for (const auto &sublist : open_lists)
-        if (!sublist->empty())
-            return false;
-    return true;
-}
+    template <class Entry>
+    void AlternationOpenList<Entry>::do_insertion(
+        EvaluationContext &eval_context, const Entry &entry)
+    {
+        for (const auto &sublist : open_lists)
+            sublist->insert(eval_context, entry);
+    }
 
-template<class Entry>
-void AlternationOpenList<Entry>::clear() {
-    for (const auto &sublist : open_lists)
-        sublist->clear();
-}
+    template <class Entry>
+    Entry AlternationOpenList<Entry>::remove_min()
+    {
+        int best = -1;
+        for (size_t i = 0; i < open_lists.size(); ++i)
+        {
+            if (!open_lists[i]->empty() &&
+                (best == -1 || priorities[i] < priorities[best]))
+            {
+                best = i;
+            }
+        }
+        assert(best != -1);
+        const auto &best_list = open_lists[best];
+        assert(!best_list->empty());
+        ++priorities[best];
+        return best_list->remove_min();
+    }
 
-template<class Entry>
-void AlternationOpenList<Entry>::boost_preferred() {
-    for (size_t i = 0; i < open_lists.size(); ++i)
-        if (open_lists[i]->only_contains_preferred_entries())
-            priorities[i] -= boost_amount;
-}
-
-template<class Entry>
-void AlternationOpenList<Entry>::get_path_dependent_evaluators(
-    set<Evaluator *> &evals) {
-    for (const auto &sublist : open_lists)
-        sublist->get_path_dependent_evaluators(evals);
-}
-
-template<class Entry>
-bool AlternationOpenList<Entry>::is_dead_end(
-    EvaluationContext &eval_context) const {
-    // If one sublist is sure we have a dead end, return true.
-    if (is_reliable_dead_end(eval_context))
+    template <class Entry>
+    bool AlternationOpenList<Entry>::empty() const
+    {
+        for (const auto &sublist : open_lists)
+            if (!sublist->empty())
+                return false;
         return true;
-    // Otherwise, return true if all sublists agree this is a dead-end.
-    for (const auto &sublist : open_lists)
-        if (!sublist->is_dead_end(eval_context))
-            return false;
-    return true;
-}
+    }
 
-template<class Entry>
-bool AlternationOpenList<Entry>::is_reliable_dead_end(
-    EvaluationContext &eval_context) const {
-    for (const auto &sublist : open_lists)
-        if (sublist->is_reliable_dead_end(eval_context))
+    template <class Entry>
+    void AlternationOpenList<Entry>::clear()
+    {
+        for (const auto &sublist : open_lists)
+            sublist->clear();
+    }
+
+    template <class Entry>
+    void AlternationOpenList<Entry>::boost_preferred()
+    {
+        for (size_t i = 0; i < open_lists.size(); ++i)
+            if (open_lists[i]->only_contains_preferred_entries())
+                priorities[i] -= boost_amount;
+    }
+
+    template <class Entry>
+    void AlternationOpenList<Entry>::get_path_dependent_evaluators(
+        set<Evaluator *> &evals)
+    {
+        for (const auto &sublist : open_lists)
+            sublist->get_path_dependent_evaluators(evals);
+    }
+
+    template <class Entry>
+    bool AlternationOpenList<Entry>::is_dead_end(
+        EvaluationContext &eval_context) const
+    {
+        // If one sublist is sure we have a dead end, return true.
+        if (is_reliable_dead_end(eval_context))
             return true;
-    return false;
-}
+        // Otherwise, return true if all sublists agree this is a dead-end.
+        for (const auto &sublist : open_lists)
+            if (!sublist->is_dead_end(eval_context))
+                return false;
+        return true;
+    }
 
-template<class Entry>
-void AlternationOpenList<Entry>::store_deadend_info(EvaluationContext &eval_context) {
-    for (const auto &sublist : open_lists) {
-        if(sublist->is_dead_end(eval_context)) {
-            return sublist->store_deadend_info(eval_context);
+    template <class Entry>
+    bool AlternationOpenList<Entry>::is_reliable_dead_end(
+        EvaluationContext &eval_context) const
+    {
+        for (const auto &sublist : open_lists)
+            if (sublist->is_reliable_dead_end(eval_context))
+                return true;
+        return false;
+    }
+
+    template <class Entry>
+    void AlternationOpenList<Entry>::store_deadend_info(EvaluationContext &eval_context)
+    {
+        for (const auto &sublist : open_lists)
+        {
+            if (sublist->is_dead_end(eval_context))
+            {
+                return sublist->store_deadend_info(eval_context);
+            }
         }
     }
-}
 
-template<class Entry>
-std::pair<SetExpression,Judgment> AlternationOpenList<Entry>::get_dead_end_justification(
-        EvaluationContext &eval_context, UnsolvabilityManager &unsolvmanager) {
-    for (const auto &sublist : open_lists) {
-        if(sublist->is_dead_end(eval_context)) {
-            return sublist->get_dead_end_justification(eval_context, unsolvmanager);
+    template <class Entry>
+    std::pair<SetExpression, Judgment> AlternationOpenList<Entry>::get_dead_end_justification(
+        EvaluationContext &eval_context, UnsolvabilityManager &unsolvmanager)
+    {
+        for (const auto &sublist : open_lists)
+        {
+            if (sublist->is_dead_end(eval_context))
+            {
+                return sublist->get_dead_end_justification(eval_context, unsolvmanager);
+            }
         }
+        std::cerr << "Requested proof of deadness for non-dead state." << std::endl;
+        utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
     }
-    std::cerr << "Requested proof of deadness for non-dead state." << std::endl;
-    utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
-}
 
-AlternationOpenListFactory::AlternationOpenListFactory(const Options &options)
-    : options(options) {
-}
+    template <class Entry>
+    std::vector<int> AlternationOpenList<Entry>::get_unreachable_variables_open_list(
+        EvaluationContext &eval_context,
+        State &state)
+    {
+        std::cout << "calling from alternation_open_list.cc";
+        return vector<int>();
+    }
 
-unique_ptr<StateOpenList>
-AlternationOpenListFactory::create_state_open_list() {
-    return utils::make_unique_ptr<AlternationOpenList<StateOpenListEntry>>(options);
-}
+    AlternationOpenListFactory::AlternationOpenListFactory(const Options &options)
+        : options(options)
+    {
+    }
 
-unique_ptr<EdgeOpenList>
-AlternationOpenListFactory::create_edge_open_list() {
-    return utils::make_unique_ptr<AlternationOpenList<EdgeOpenListEntry>>(options);
-}
+    unique_ptr<StateOpenList>
+    AlternationOpenListFactory::create_state_open_list()
+    {
+        return utils::make_unique_ptr<AlternationOpenList<StateOpenListEntry>>(options);
+    }
 
-static shared_ptr<OpenListFactory> _parse(OptionParser &parser) {
-    parser.document_synopsis("Alternation open list",
-                             "alternates between several open lists.");
-    parser.add_list_option<shared_ptr<OpenListFactory>>(
-        "sublists",
-        "open lists between which this one alternates");
-    parser.add_option<int>(
-        "boost",
-        "boost value for contained open lists that are restricted "
-        "to preferred successors",
-        "0");
+    unique_ptr<EdgeOpenList>
+    AlternationOpenListFactory::create_edge_open_list()
+    {
+        return utils::make_unique_ptr<AlternationOpenList<EdgeOpenListEntry>>(options);
+    }
 
-    Options opts = parser.parse();
-    opts.verify_list_non_empty<shared_ptr<OpenListFactory>>("sublists");
-    if (parser.dry_run())
-        return nullptr;
-    else
-        return make_shared<AlternationOpenListFactory>(opts);
-}
+    static shared_ptr<OpenListFactory> _parse(OptionParser &parser)
+    {
+        parser.document_synopsis("Alternation open list",
+                                 "alternates between several open lists.");
+        parser.add_list_option<shared_ptr<OpenListFactory>>(
+            "sublists",
+            "open lists between which this one alternates");
+        parser.add_option<int>(
+            "boost",
+            "boost value for contained open lists that are restricted "
+            "to preferred successors",
+            "0");
 
-static Plugin<OpenListFactory> _plugin("alt", _parse);
+        Options opts = parser.parse();
+        opts.verify_list_non_empty<shared_ptr<OpenListFactory>>("sublists");
+        if (parser.dry_run())
+            return nullptr;
+        else
+            return make_shared<AlternationOpenListFactory>(opts);
+    }
+
+    static Plugin<OpenListFactory> _plugin("alt", _parse);
 }
