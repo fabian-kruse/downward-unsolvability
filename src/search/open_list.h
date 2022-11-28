@@ -129,7 +129,7 @@ public:
   virtual void store_deadend_info(EvaluationContext &eval_context) = 0;
   virtual std::pair<SetExpression, Judgment> get_dead_end_justification(
       EvaluationContext &eval_context, UnsolvabilityManager &unsolvmanager) = 0;
-  virtual std::vector<int> get_unreachable_variables_open_list(EvaluationContext &eval_context, State &state) = 0;
+  virtual std::vector<int> get_reachable_facts_open_list(EvaluationContext &eval_context, State &state) = 0;
 };
 
 using StateOpenListEntry = StateID;

@@ -6,28 +6,32 @@
 #include <cassert>
 #include <unordered_map>
 
-
-template<class T>
-class ArrayView {
+template <class T>
+class ArrayView
+{
     T *p;
     int size_;
+
 public:
     ArrayView(T *p, int size) : p(p), size_(size) {}
     ArrayView(const ArrayView<T> &other) = default;
 
     ArrayView<T> &operator=(const ArrayView<T> &other) = default;
 
-    T &operator[](int index) {
+    T &operator[](int index)
+    {
         assert(index >= 0 && index < size_);
         return p[index];
     }
 
-    const T &operator[](int index) const {
+    const T &operator[](int index) const
+    {
         assert(index >= 0 && index < size_);
         return p[index];
     }
 
-    int size() const {
+    int size() const
+    {
         return size_;
     }
 };
@@ -43,8 +47,9 @@ public:
   also contains more documentation.
 */
 
-template<class Element>
-class PerStateArray : public subscriber::Subscriber<StateRegistry> {
+template <class Element>
+class PerStateArray : public subscriber::Subscriber<StateRegistry>
+{
     const std::vector<Element> default_array;
     using EntryArrayVectorMap = std::unordered_map<const StateRegistry *,
                                                    segmented_vector::SegmentedArrayVector<Element> *>;
@@ -53,16 +58,21 @@ class PerStateArray : public subscriber::Subscriber<StateRegistry> {
     mutable const StateRegistry *cached_registry;
     mutable segmented_vector::SegmentedArrayVector<Element> *cached_entries;
 
-    segmented_vector::SegmentedArrayVector<Element> *get_entries(const StateRegistry *registry) {
-        if (cached_registry != registry) {
+    segmented_vector::SegmentedArrayVector<Element> *get_entries(const StateRegistry *registry)
+    {
+        if (cached_registry != registry)
+        {
             cached_registry = registry;
             auto it = entry_arrays_by_registry.find(registry);
-            if (it == entry_arrays_by_registry.end()) {
+            if (it == entry_arrays_by_registry.end())
+            {
                 cached_entries = new segmented_vector::SegmentedArrayVector<Element>(
                     default_array.size());
                 entry_arrays_by_registry[registry] = cached_entries;
                 registry->subscribe(this);
-            } else {
+            }
+            else
+            {
                 cached_entries = it->second;
             }
         }
@@ -71,12 +81,17 @@ class PerStateArray : public subscriber::Subscriber<StateRegistry> {
     }
 
     const segmented_vector::SegmentedArrayVector<Element> *get_entries(
-        const StateRegistry *registry) const {
-        if (cached_registry != registry) {
+        const StateRegistry *registry) const
+    {
+        if (cached_registry != registry)
+        {
             const auto it = entry_arrays_by_registry.find(registry);
-            if (it == entry_arrays_by_registry.end()) {
+            if (it == entry_arrays_by_registry.end())
+            {
                 return nullptr;
-            } else {
+            }
+            else
+            {
                 cached_registry = registry;
                 cached_entries = const_cast<segmented_vector::SegmentedArrayVector<Element> *>(
                     it->second);
@@ -90,21 +105,26 @@ public:
     explicit PerStateArray(const std::vector<Element> &default_array)
         : default_array(default_array),
           cached_registry(nullptr),
-          cached_entries(nullptr) {
+          cached_entries(nullptr)
+    {
     }
 
     PerStateArray(const PerStateArray<Element> &) = delete;
     PerStateArray &operator=(const PerStateArray<Element> &) = delete;
 
-    virtual ~PerStateArray() override {
-        for (auto it : entry_arrays_by_registry) {
+    virtual ~PerStateArray() override
+    {
+        for (auto it : entry_arrays_by_registry)
+        {
             delete it.second;
         }
     }
 
-    ArrayView<Element> operator[](const State &state) {
+    ArrayView<Element> operator[](const State &state)
+    {
         const StateRegistry *registry = state.get_registry();
-        if (!registry) {
+        if (!registry)
+        {
             std::cerr << "Tried to access per-state array with an unregistered "
                       << "state." << std::endl;
             utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
@@ -114,13 +134,15 @@ public:
         assert(state.get_id() != StateID::no_state);
         size_t virtual_size = registry->size();
         assert(utils::in_bounds(state_id, *registry));
-        if (entries->size() < virtual_size) {
+        if (entries->size() < virtual_size)
+        {
             entries->resize(virtual_size, default_array.data());
         }
         return ArrayView<Element>((*entries)[state_id], default_array.size());
     }
 
-    ArrayView<Element> operator[](const State &) const {
+    ArrayView<Element> operator[](const State &) const
+    {
         ABORT("PerStateArray::operator[] const not implemented. "
               "See source code for more information.");
         /*
@@ -132,10 +154,12 @@ public:
         */
     }
 
-    virtual void notify_service_destroyed(const StateRegistry *registry) override {
+    virtual void notify_service_destroyed(const StateRegistry *registry) override
+    {
         delete entry_arrays_by_registry[registry];
         entry_arrays_by_registry.erase(registry);
-        if (registry == cached_registry) {
+        if (registry == cached_registry)
+        {
             cached_registry = nullptr;
             cached_entries = nullptr;
         }

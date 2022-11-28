@@ -4,6 +4,7 @@
 #include "../utils/collections.h"
 #include "../utils/logging.h"
 #include "../utils/timer.h"
+#include "../algorithms/priority_queues.h"
 
 #include <algorithm>
 #include <cassert>
@@ -398,10 +399,125 @@ namespace relaxation_heuristic
         return entry->second;
     }
 
-    std::vector<int> RelaxationHeuristic::get_unreachable_variables_evaluator(EvaluationContext &eval_context, State &state)
+    // testing function bc cost should not be needed
+    bool necessary_to_enqueue(PropID prop_id, int cost)
+    {
+        return true;
+    }
+
+    std::vector<int> RelaxationHeuristic::get_reachable_facts_evaluator(EvaluationContext &eval_context, State &state)
     {
         std::cout << "runs in relaxation_heuristic.cc" << std::endl;
-        std::vector<int> v = {4};
-        return v;
+        // setup queue
+        priority_queues::AdaptiveQueue<PropID> queue;
+
+        // copied from max_heuristic.cc setup_exploration_queue
+
+        for (Proposition &prop : propositions)
+            prop.cost = -1;
+        // Deal with operators and axioms without preconditions.
+        for (UnaryOperator &op : unary_operators)
+        {
+            op.unsatisfied_preconditions = op.num_preconditions;
+            // op.cost = op.base_cost; // will be increased by precondition costs
+            if (op.unsatisfied_preconditions == 0 || necessary_to_enqueue(op.effect, op.base_cost))
+                queue.push(op.cost, op.effect);
+            // queue.push(op.effect, 0);
+        }
+
+        // copied from max_heuristic.cc setup_exploration_queue(State &state)
+
+        for (FactProxy fact : state)
+        {
+            PropID init_prop = get_prop_id(fact);
+            if (necessary_to_enqueue(init_prop, 0))
+            {
+                queue.push(0, init_prop);
+            }
+        }
+
+        // print out if queue is empty
+        if (queue.empty())
+        {
+            std::cout << "queue is empty" << std::endl;
+        }
+
+        // not sure if maybe better to compute task_properties::get_num_facts(task_proxy) only once
+        std::vector<int> reachable_variables(task_properties::get_num_facts(task_proxy), 0);
+        int fact = 0;
+        vector<int> vals = state.get_unpacked_values();
+        for (int i = 0; i < vals.size(); i++)
+        {
+            reachable_variables[fact + vals[i]] = 1;
+            fact += task_proxy.get_variables()[i].get_domain_size();
+        }
+
+        // print reachable_variables
+        std::cout << "state vars: ";
+        for (int i = 0; i < reachable_variables.size(); i++)
+        {
+            std::cout << reachable_variables[i] << " ";
+        }
+        std::cout << std::endl;
+
+        // loop over propositions to create vector between prop_id and fact_id
+        std::vector<PropID> prop_to_fact(propositions.size(), -1);
+        assert(propositions.size() == task_properties::get_num_facts(task_proxy));
+        int id = 0;
+        for (Proposition &prop : propositions)
+        {
+            prop_to_fact[id] = get_prop_id(prop);
+            id++;
+        }
+        int unsolved_goals = goal_propositions.size();
+        while (!queue.empty())
+        {
+            pair<int, PropID> top_pair = queue.pop();
+            int distance = top_pair.first;
+            PropID prop_id = top_pair.second;
+            Proposition *prop = get_proposition(prop_id);
+            int prop_cost = prop->cost;
+            // std::cout << "prop: " << prop_id << " " << prop_cost << std::endl;
+            /* assert(prop_cost >= 0);
+            assert(prop_cost <= distance);
+            if (prop_cost < distance)
+                continue;
+ */
+            // set reachable_variables to 1 for fact in prop
+            /* std::cout << "prop: " << prop_id << std::endl;
+
+            if (prop->is_goal && --unsolved_goals == 0)
+            {
+                std::cout << "found goal" << std::endl;
+                return reachable_variables;
+            }
+            std::cout << "prop_to_fact[prop_id]: " << prop_to_fact[prop_id] << std::endl; */
+            reachable_variables[prop_to_fact[prop_id]] = 1;
+
+            for (OpID op_id : precondition_of_pool.get_slice(
+                     prop->precondition_of, prop->num_precondition_occurences))
+            {
+                UnaryOperator *unary_op = get_operator(op_id);
+                /* unary_op->cost = max(unary_op->cost,
+                                     unary_op->base_cost + prop_cost); */
+                --unary_op->unsatisfied_preconditions;
+                assert(unary_op->unsatisfied_preconditions >= 0);
+                if (unary_op->unsatisfied_preconditions == 0 && necessary_to_enqueue(unary_op->effect, unary_op->cost))
+                {
+                    // std::cout << "pushed op: " << op_id << std::endl;
+                    queue.push(unary_op->cost, unary_op->effect);
+                    // queue.push(unary_op->effect, 0);
+                }
+            }
+        }
+
+        // print reachable_variables
+        std::cout << "reachable vars: ";
+        for (int i = 0; i < reachable_variables.size(); i++)
+        {
+            std::cout << reachable_variables[i] << " ";
+        }
+        std::cout << std::endl;
+        return reachable_variables;
     }
 }

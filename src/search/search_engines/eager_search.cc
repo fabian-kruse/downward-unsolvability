@@ -519,8 +519,8 @@ namespace eager_search
                 if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
                 {
                     std::cout << "dead end: " << id << std::endl;
-                    std::cout << open_list->get_unreachable_variables_open_list(eval_context, state) << std::endl;
-                }
+                    vector<int> reachable_vars = open_list->get_reachable_facts_open_list(eval_context, state);
+                                }
 
                 certificate << "(";
                 for (size_t i = 0; i < varorder.size(); ++i)

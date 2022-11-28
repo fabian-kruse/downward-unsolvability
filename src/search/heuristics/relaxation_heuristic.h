@@ -6,6 +6,7 @@
 #include "../heuristic.h"
 #include "../unsolvability/cudd_interface.h"
 #include "../evaluation_context.h"
+#include "../algorithms/priority_queues.h"
 
 #include "../utils/collections.h"
 
@@ -145,7 +146,7 @@ namespace relaxation_heuristic
         virtual void store_deadend_info(EvaluationContext &eval_context) override;
         virtual std::pair<SetExpression, Judgment> get_dead_end_justification(
             EvaluationContext &eval_context, UnsolvabilityManager &unsolvmanager) override;
-        virtual std::vector<int> get_unreachable_variables_evaluator(EvaluationContext &eval_context, State &state) override;
+        virtual std::vector<int> get_reachable_facts_evaluator(EvaluationContext &eval_context, State &state) override;
     };
 }
 

@@ -89,7 +89,7 @@ public:
     utils::exit_with(utils::ExitCode::SEARCH_UNSUPPORTED);
   }
 
-  virtual std::vector<int> get_unreachable_variables_evaluator(EvaluationContext &, State &) { return {}; }
+  virtual std::vector<int> get_reachable_facts_evaluator(EvaluationContext &, State &) { return {}; }
 
   void report_value_for_initial_state(const EvaluationResult &result) const;
   void report_new_minimum_value(const EvaluationResult &result) const;

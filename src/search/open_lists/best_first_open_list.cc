@@ -46,7 +46,7 @@ namespace standard_scalar_open_list
         virtual void store_deadend_info(EvaluationContext &eval_context) override;
         virtual std::pair<SetExpression, Judgment> get_dead_end_justification(
             EvaluationContext &eval_context, UnsolvabilityManager &unsolvmanager) override;
-        virtual std::vector<int> get_unreachable_variables_open_list(EvaluationContext &eval_context, State &state) override;
+        virtual std::vector<int> get_reachable_facts_open_list(EvaluationContext &eval_context, State &state) override;
     };
 
     template <class Entry>
@@ -147,7 +147,7 @@ namespace standard_scalar_open_list
     }
 
     template <class Entry>
-    std::vector<int> BestFirstOpenList<Entry>::get_unreachable_variables_open_list(
+    std::vector<int> BestFirstOpenList<Entry>::get_reachable_facts_open_list(
         EvaluationContext &eval_context,
         State &state)
     {
