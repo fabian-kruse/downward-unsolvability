@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional.hh>
 #include <set>
+#include <map>
 
 using namespace std;
 
@@ -496,55 +497,72 @@ namespace eager_search
         }
 
         bool whole_formula = true;
-
         if (whole_formula)
         {
             std::ofstream certificate;
             certificate.open(unsolvability_directory + "wholeproof.txt");
-
+            bool first;
             // write compR formula
             certificate << "BC1.1\ncompR := ";
             certificate << "( ";
             size_t state_counter = 0;
+            map<StateID, vector<int>> reachable_facts;
             for (StateID id : state_registry)
             {
                 State state = state_registry.lookup_state(id);
-
                 EvaluationContext eval_context(state,
                                                0,
                                                false, &statistics);
                 state.unpack();
                 std::vector<int> vals = state.get_unpacked_values();
-
+                certificate << "(";
+                first = true;
                 if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
                 {
-                    std::cout << "dead end: " << id << std::endl;
-                    vector<int> reachable_vars = open_list->get_reachable_facts_open_list(eval_context, state);
-                                }
-
-                certificate << "(";
-                for (size_t i = 0; i < varorder.size(); ++i)
-                {
-                    // variables start at 1 for dimacs format
-                    int var = varorder[i];
-                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    reachable_facts[id] = open_list->get_reachable_facts_open_list(eval_context, state);
+                    std::cout << "writing: ";
+                    for (size_t i = 0; i < reachable_facts[id].size(); i++)
                     {
-                        if (vals[i] == j)
+
+                        if (reachable_facts[id][i] == 0)
                         {
-                            certificate << "!v" + to_string((fact_to_var[var][j] + 1)) << " ";
+                            if (!first)
+                            {
+                                certificate << "| ";
+                                std::cout << "| ";
+                            }
+                            certificate << "v" << to_string(i + 1) << " ";
+                            std::cout << "v" << to_string(i + 1) << " ";
+                            first = false;
                         }
-                        else
+                    }
+                    std::cout << std::endl;
+                }
+                else
+                {
+                    for (size_t i = 0; i < varorder.size(); ++i)
+                    {
+                        // variables start at 1 for dimacs format
+                        int var = varorder[i];
+                        for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                         {
-                            certificate << "v" + to_string(fact_to_var[var][j] + 1) << " ";
+                            if (vals[i] == j)
+                            {
+                                certificate << "!v" + to_string((fact_to_var[var][j] + 1)) << " ";
+                            }
+                            else
+                            {
+                                certificate << "v" + to_string(fact_to_var[var][j] + 1) << " ";
+                            }
+                            if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                            {
+                                certificate << "| ";
+                            }
                         }
-                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                        if (i != varorder.size() - 1)
                         {
                             certificate << "| ";
                         }
-                    }
-                    if (i != varorder.size() - 1)
-                    {
-                        certificate << "| ";
                     }
                 }
                 certificate << ")";
@@ -570,30 +588,50 @@ namespace eager_search
                 std::vector<int> vals = state.get_unpacked_values();
 
                 certificate << "(";
-                for (size_t i = 0; i < varorder.size(); ++i)
+                first = true;
+                if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
                 {
-                    // variables start at 1 for dimacs format
-                    int var = varorder[i];
-                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    for (size_t i = 0; i < reachable_facts[id].size(); i++)
                     {
-                        if (vals[i] == j)
+                        if (reachable_facts[id][i] == 0)
                         {
-                            certificate << "!v" + to_string((fact_to_var[var][j] + 1 + fact_amount)) << " ";
+                            if (!first)
+                            {
+                                certificate << "| ";
+                            }
+                            certificate << "v" << to_string(i + 1 + fact_amount) << " ";
+                            first = false;
                         }
-                        else
+                    }
+                }
+                else
+                {
+                    for (size_t i = 0; i < varorder.size(); ++i)
+                    {
+                        // variables start at 1 for dimacs format
+                        int var = varorder[i];
+                        for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                         {
-                            certificate << "v" + to_string(fact_to_var[var][j] + 1 + fact_amount) << " ";
+                            if (vals[i] == j)
+                            {
+                                certificate << "!v" + to_string((fact_to_var[var][j] + 1 + fact_amount)) << " ";
+                            }
+                            else
+                            {
+                                certificate << "v" + to_string(fact_to_var[var][j] + 1 + fact_amount) << " ";
+                            }
+                            if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                            {
+                                certificate << "| ";
+                            }
                         }
-                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                        if (i != varorder.size() - 1)
                         {
                             certificate << "| ";
                         }
                     }
-                    if (i != varorder.size() - 1)
-                    {
-                        certificate << "| ";
-                    }
                 }
+
                 certificate << ")";
                 state_counter++;
                 if (state_counter != state_registry.size())
@@ -615,32 +653,51 @@ namespace eager_search
                                                false, &statistics);
                 state.unpack();
                 std::vector<int> vals = state.get_unpacked_values();
-
                 certificate << "(";
-                for (size_t i = 0; i < varorder.size(); ++i)
+                first = true;
+                if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
                 {
-                    // variables start at 1 for dimacs format
-                    int var = varorder[i];
-                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    for (size_t i = 0; i < reachable_facts[id].size(); i++)
                     {
-                        if (vals[i] == j)
+                        if (reachable_facts[id][i] == 0)
                         {
-                            certificate << "v" + to_string((fact_to_var[var][j] + 1)) << " ";
+                            if (!first)
+                            {
+                                certificate << "& ";
+                            }
+                            certificate << "!v" << to_string(i + 1) << " ";
+                            first = false;
                         }
-                        else
+                    }
+                }
+                else
+                {
+                    for (size_t i = 0; i < varorder.size(); ++i)
+                    {
+                        // variables start at 1 for dimacs format
+                        int var = varorder[i];
+                        for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                         {
-                            certificate << "!v" + to_string(fact_to_var[var][j] + 1) << " ";
+                            if (vals[i] == j)
+                            {
+                                certificate << "v" + to_string((fact_to_var[var][j] + 1)) << " ";
+                            }
+                            else
+                            {
+                                certificate << "!v" + to_string(fact_to_var[var][j] + 1) << " ";
+                            }
+                            if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                            {
+                                certificate << "& ";
+                            }
                         }
-                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                        if (i != varorder.size() - 1)
                         {
                             certificate << "& ";
                         }
                     }
-                    if (i != varorder.size() - 1)
-                    {
-                        certificate << "& ";
-                    }
                 }
+
                 certificate << ")";
                 state_counter++;
                 if (state_counter != state_registry.size())

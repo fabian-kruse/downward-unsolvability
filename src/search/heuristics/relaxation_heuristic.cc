@@ -407,7 +407,6 @@ namespace relaxation_heuristic
 
     std::vector<int> RelaxationHeuristic::get_reachable_facts_evaluator(EvaluationContext &eval_context, State &state)
     {
-        std::cout << "runs in relaxation_heuristic.cc" << std::endl;
         // setup queue
         priority_queues::AdaptiveQueue<PropID> queue;
 
@@ -435,30 +434,15 @@ namespace relaxation_heuristic
                 queue.push(0, init_prop);
             }
         }
-
-        // print out if queue is empty
-        if (queue.empty())
-        {
-            std::cout << "queue is empty" << std::endl;
-        }
-
-        // not sure if maybe better to compute task_properties::get_num_facts(task_proxy) only once
-        std::vector<int> reachable_variables(task_properties::get_num_facts(task_proxy), 0);
+        // TODO:not sure if maybe better to compute task_properties::get_num_facts(task_proxy) only once
+        std::vector<int> reachable_facts(task_properties::get_num_facts(task_proxy), 0);
         int fact = 0;
         vector<int> vals = state.get_unpacked_values();
-        for (int i = 0; i < vals.size(); i++)
+        for (size_t i = 0; i < vals.size(); i++)
         {
-            reachable_variables[fact + vals[i]] = 1;
+            reachable_facts[fact + vals[i]] = 1;
             fact += task_proxy.get_variables()[i].get_domain_size();
         }
-
-        // print reachable_variables
-        std::cout << "state vars: ";
-        for (int i = 0; i < reachable_variables.size(); i++)
-        {
-            std::cout << reachable_variables[i] << " ";
-        }
-        std::cout << std::endl;
 
         // loop over propositions to create vector between prop_id and fact_id
         std::vector<PropID> prop_to_fact(propositions.size(), -1);
@@ -469,30 +453,30 @@ namespace relaxation_heuristic
             prop_to_fact[id] = get_prop_id(prop);
             id++;
         }
-        int unsolved_goals = goal_propositions.size();
+        // int unsolved_goals = goal_propositions.size();
         while (!queue.empty())
         {
             pair<int, PropID> top_pair = queue.pop();
-            int distance = top_pair.first;
+            // int distance = top_pair.first;
             PropID prop_id = top_pair.second;
             Proposition *prop = get_proposition(prop_id);
-            int prop_cost = prop->cost;
-            // std::cout << "prop: " << prop_id << " " << prop_cost << std::endl;
+            // int prop_cost = prop->cost;
+            std::cout << prop_id + 1 << " ";
             /* assert(prop_cost >= 0);
             assert(prop_cost <= distance);
             if (prop_cost < distance)
                 continue;
  */
-            // set reachable_variables to 1 for fact in prop
+            // set reachable_facts to 1 for fact in prop
             /* std::cout << "prop: " << prop_id << std::endl;
 
             if (prop->is_goal && --unsolved_goals == 0)
             {
                 std::cout << "found goal" << std::endl;
-                return reachable_variables;
+                return reachable_facts;
             }
             std::cout << "prop_to_fact[prop_id]: " << prop_to_fact[prop_id] << std::endl; */
-            reachable_variables[prop_to_fact[prop_id]] = 1;
+            reachable_facts[prop_to_fact[prop_id]] = 1;
 
             for (OpID op_id : precondition_of_pool.get_slice(
                      prop->precondition_of, prop->num_precondition_occurences))
@@ -510,14 +494,14 @@ namespace relaxation_heuristic
                 }
             }
         }
-
-        // print reachable_variables
-        std::cout << "reachable vars: ";
-        for (int i = 0; i < reachable_variables.size(); i++)
+        std::cout << std::endl;
+        // print out reachable variables
+        std::cout << "reachable variables: ";
+        for (size_t i = 0; i < reachable_facts.size(); i++)
         {
-            std::cout << reachable_variables[i] << " ";
+            std::cout << reachable_facts[i] << " ";
         }
         std::cout << std::endl;
-        return reachable_variables;
+        return reachable_facts;
     }
 }
