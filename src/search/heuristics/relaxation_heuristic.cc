@@ -419,24 +419,20 @@ namespace relaxation_heuristic
 
     std::vector<int> RelaxationHeuristic::get_reachable_facts_evaluator(EvaluationContext &eval_context, State &state)
     {
-        // setup queue
+        // setup queue: copied from max_heuristic.cc setup_exploration_queue and max_heuristic.cc setup_exploration_queue(State &state)
         priority_queues::AdaptiveQueue<PropID> queue;
-        int num_facts = task_properties::get_num_facts(task_proxy);
-
-        // copied from max_heuristic.cc setup_exploration_queue
         for (UnaryOperator &op : unary_operators)
         {
             op.unsatisfied_preconditions = op.num_preconditions;
             if (op.unsatisfied_preconditions == 0)
                 queue.push(op.cost, op.effect);
         }
-        // copied from max_heuristic.cc setup_exploration_queue(State &state)
         for (FactProxy fact : state)
         {
             PropID init_prop = get_prop_id(fact);
             queue.push(0, init_prop);
         }
-        // TODO:not sure if maybe better to compute task_properties::get_num_facts(task_proxy) only once
+        int num_facts = task_properties::get_num_facts(task_proxy);
         std::pair<std::vector<int>, std::vector<int>> setup = setup_reachable_facts(state, num_facts);
         std::vector<int> reachable_facts = setup.first;
         std::vector<int> prop_to_fact = setup.second;

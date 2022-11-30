@@ -415,6 +415,88 @@ namespace eager_search
         SearchEngine::add_options_to_parser(parser);
     }
 
+    std::map<StateID, std::vector<int>> EagerSearch::write_formula(std::ofstream &certificate,
+                                                                   std::string formula_name,
+                                                                   std::vector<int> varorder,
+                                                                   std::vector<std::vector<int>> fact_to_var,
+                                                                   int offset, std::string inner_separator,
+                                                                   std::string outer_separator,
+                                                                   std::string primary_sign,
+                                                                   std::string secondary_sign,
+                                                                   std::map<StateID, std::vector<int>> reachable_facts /*= std::map<StateID, std::vector<int>>()*/)
+    {
+        bool first;
+        certificate << formula_name + " := ";
+        certificate << "( ";
+        size_t state_counter = 0;
+        bool get_reachable_facts = reachable_facts.empty();
+        for (StateID id : state_registry)
+        {
+            State state = state_registry.lookup_state(id);
+            EvaluationContext eval_context(state,
+                                           0,
+                                           false, &statistics);
+            state.unpack();
+            std::vector<int> vals = state.get_unpacked_values();
+            first = true;
+            certificate << "(";
+            if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
+            {
+                if (get_reachable_facts)
+                {
+                    reachable_facts[id] = open_list->get_reachable_facts_open_list(eval_context, state);
+                }
+                for (size_t i = 0; i < reachable_facts[id].size(); i++)
+                {
+                    if (reachable_facts[id][i] == 0)
+                    {
+                        if (!first)
+                        {
+                            certificate << inner_separator + " ";
+                        }
+                        certificate << primary_sign + "v" << to_string(i + 1 + offset) << " ";
+                        first = false;
+                    }
+                }
+            }
+            else
+            {
+                for (size_t i = 0; i < varorder.size(); ++i)
+                {
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    {
+                        if (vals[i] == j)
+                        {
+                            certificate << secondary_sign + "v" + to_string((fact_to_var[var][j] + 1 + offset)) << " ";
+                        }
+                        else
+                        {
+                            certificate << primary_sign + "v" + to_string(fact_to_var[var][j] + 1 + offset) << " ";
+                        }
+                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
+                        {
+                            certificate << inner_separator + " ";
+                        }
+                    }
+                    if (i != varorder.size() - 1)
+                    {
+                        certificate << inner_separator + " ";
+                    }
+                }
+            }
+            certificate << ")";
+            state_counter++;
+            if (state_counter != state_registry.size())
+            {
+                certificate << " " + outer_separator + " ";
+            }
+        }
+        certificate << ");\n";
+        return reachable_facts;
+    }
+
     void EagerSearch::write_unsolvability_proof()
     {
         double writing_start = utils::g_timer();
@@ -501,205 +583,11 @@ namespace eager_search
         {
             std::ofstream certificate;
             certificate.open(unsolvability_directory + "wholeproof.txt");
-            bool first;
-            // write compR formula
-            certificate << "BC1.1\ncompR := ";
-            certificate << "( ";
-            size_t state_counter = 0;
-            map<StateID, vector<int>> reachable_facts;
-            for (StateID id : state_registry)
-            {
-                State state = state_registry.lookup_state(id);
-                EvaluationContext eval_context(state,
-                                               0,
-                                               false, &statistics);
-                state.unpack();
-                std::vector<int> vals = state.get_unpacked_values();
-                certificate << "(";
-                first = true;
-
-                // TODO: not sure if it should be if-else or just if
-                if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
-                {
-                    reachable_facts[id] = open_list->get_reachable_facts_open_list(eval_context, state);
-                    for (size_t i = 0; i < reachable_facts[id].size(); i++)
-                    {
-                        if (reachable_facts[id][i] == 0)
-                        {
-                            if (!first)
-                            {
-                                certificate << "| ";
-                            }
-                            certificate << "v" << to_string(i + 1) << " ";
-                            first = false;
-                        }
-                    }
-                    certificate << ") & (";
-                }
-
-                for (size_t i = 0; i < varorder.size(); ++i)
-                {
-                    // variables start at 1 for dimacs format
-                    int var = varorder[i];
-                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
-                    {
-                        if (vals[i] == j)
-                        {
-                            certificate << "!v" + to_string((fact_to_var[var][j] + 1)) << " ";
-                        }
-                        else
-                        {
-                            certificate << "v" + to_string(fact_to_var[var][j] + 1) << " ";
-                        }
-                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
-                        {
-                            certificate << "| ";
-                        }
-                    }
-                    if (i != varorder.size() - 1)
-                    {
-                        certificate << "| ";
-                    }
-                }
-                certificate << ")";
-                state_counter++;
-                if (state_counter != state_registry.size())
-                {
-                    certificate << " & ";
-                }
-            }
-            certificate << ");\n";
-
-            // write compR' formula
-            certificate << "compR' := ";
-            certificate << "( ";
-            state_counter = 0;
-            for (StateID id : state_registry)
-            {
-                State state = state_registry.lookup_state(id);
-                EvaluationContext eval_context(state,
-                                               0,
-                                               false, &statistics);
-                state.unpack();
-                std::vector<int> vals = state.get_unpacked_values();
-
-                certificate << "(";
-                first = true;
-                if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
-                {
-                    for (size_t i = 0; i < reachable_facts[id].size(); i++)
-                    {
-                        if (reachable_facts[id][i] == 0)
-                        {
-                            if (!first)
-                            {
-                                certificate << "| ";
-                            }
-                            certificate << "v" << to_string(i + 1 + fact_amount) << " ";
-                            first = false;
-                        }
-                    }
-                    certificate << ") & (";
-                }
-
-                for (size_t i = 0; i < varorder.size(); ++i)
-                {
-                    // variables start at 1 for dimacs format
-                    int var = varorder[i];
-                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
-                    {
-                        if (vals[i] == j)
-                        {
-                            certificate << "!v" + to_string((fact_to_var[var][j] + 1 + fact_amount)) << " ";
-                        }
-                        else
-                        {
-                            certificate << "v" + to_string(fact_to_var[var][j] + 1 + fact_amount) << " ";
-                        }
-                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
-                        {
-                            certificate << "| ";
-                        }
-                    }
-                    if (i != varorder.size() - 1)
-                    {
-                        certificate << "| ";
-                    }
-                }
-
-                certificate << ")";
-                state_counter++;
-                if (state_counter != state_registry.size())
-                {
-                    certificate << " & ";
-                }
-            }
-            certificate << ");\n";
-
-            // write R formula
-            certificate << "R := ";
-            certificate << "( ";
-            state_counter = 0;
-            for (StateID id : state_registry)
-            {
-                State state = state_registry.lookup_state(id);
-                EvaluationContext eval_context(state,
-                                               0,
-                                               false, &statistics);
-                state.unpack();
-                std::vector<int> vals = state.get_unpacked_values();
-                certificate << "(";
-                first = true;
-                if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
-                {
-                    for (size_t i = 0; i < reachable_facts[id].size(); i++)
-                    {
-                        if (reachable_facts[id][i] == 0)
-                        {
-                            if (!first)
-                            {
-                                certificate << "& ";
-                            }
-                            certificate << "!v" << to_string(i + 1) << " ";
-                            first = false;
-                        }
-                    }
-                    certificate << ") | (";
-                }
-
-                for (size_t i = 0; i < varorder.size(); ++i)
-                {
-                    // variables start at 1 for dimacs format
-                    int var = varorder[i];
-                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
-                    {
-                        if (vals[i] == j)
-                        {
-                            certificate << "v" + to_string((fact_to_var[var][j] + 1)) << " ";
-                        }
-                        else
-                        {
-                            certificate << "!v" + to_string(fact_to_var[var][j] + 1) << " ";
-                        }
-                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
-                        {
-                            certificate << "& ";
-                        }
-                    }
-                    if (i != varorder.size() - 1)
-                    {
-                        certificate << "& ";
-                    }
-                }
-
-                certificate << ")";
-                state_counter++;
-                if (state_counter != state_registry.size())
-                {
-                    certificate << " | ";
-                }
-            }
-            certificate << ");\n";
+            // write compR, compR' and R formula
+            certificate << "BC1.1\n";
+            map<StateID, vector<int>> reachable_facts = write_formula(certificate, "compR", varorder, fact_to_var, 0, "|", "&", "", "!");
+            write_formula(certificate, "compR'", varorder, fact_to_var, fact_amount, "|", "&", "", "!", reachable_facts);
+            write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
             // write initial state formula
             certificate << "init := ( ";
             for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
