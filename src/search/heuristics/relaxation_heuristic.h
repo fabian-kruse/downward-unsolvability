@@ -136,6 +136,7 @@ namespace relaxation_heuristic
           int bddindex: the index of the requested bdd in bdds vector
          */
         std::pair<bool, int> get_bdd_for_state(const State &state);
+        std::pair<std::vector<int>, std::vector<int>> setup_reachable_facts(State &state, int num_facts);
 
     public:
         explicit RelaxationHeuristic(const options::Options &options);

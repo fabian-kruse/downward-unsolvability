@@ -399,10 +399,29 @@ namespace relaxation_heuristic
         return entry->second;
     }
 
+    std::pair<std::vector<int>, std::vector<int>> RelaxationHeuristic::setup_reachable_facts(State &state, int num_facts)
+    {
+        std::vector<int> reachable_facts(num_facts, 0);
+        int fact = 0;
+        vector<int> vals = state.get_unpacked_values();
+        for (size_t i = 0; i < vals.size(); i++)
+        {
+            reachable_facts[fact + vals[i]] = 1;
+            fact += task_proxy.get_variables()[i].get_domain_size();
+        }
+        std::vector<PropID> prop_to_fact(num_facts, -1);
+        for (int i = 0; i < num_facts; i++)
+        {
+            prop_to_fact[get_prop_id(propositions[i])] = i;
+        }
+        return std::make_pair(reachable_facts, prop_to_fact);
+    }
+
     std::vector<int> RelaxationHeuristic::get_reachable_facts_evaluator(EvaluationContext &eval_context, State &state)
     {
         // setup queue
         priority_queues::AdaptiveQueue<PropID> queue;
+        int num_facts = task_properties::get_num_facts(task_proxy);
 
         // copied from max_heuristic.cc setup_exploration_queue
         for (UnaryOperator &op : unary_operators)
@@ -418,23 +437,10 @@ namespace relaxation_heuristic
             queue.push(0, init_prop);
         }
         // TODO:not sure if maybe better to compute task_properties::get_num_facts(task_proxy) only once
-        std::vector<int> reachable_facts(task_properties::get_num_facts(task_proxy), 0);
-        int fact = 0;
-        vector<int> vals = state.get_unpacked_values();
-        for (size_t i = 0; i < vals.size(); i++)
-        {
-            reachable_facts[fact + vals[i]] = 1;
-            fact += task_proxy.get_variables()[i].get_domain_size();
-        }
-        // this is probably not needed
-        std::vector<PropID> prop_to_fact(propositions.size(), -1);
-        assert(propositions.size() == task_properties::get_num_facts(task_proxy));
-        int id = 0;
-        for (Proposition &prop : propositions)
-        {
-            prop_to_fact[id] = get_prop_id(prop);
-            id++;
-        }
+        std::pair<std::vector<int>, std::vector<int>> setup = setup_reachable_facts(state, num_facts);
+        std::vector<int> reachable_facts = setup.first;
+        std::vector<int> prop_to_fact = setup.second;
+
         while (!queue.empty())
         {
             pair<int, PropID> top_pair = queue.pop();
