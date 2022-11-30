@@ -517,52 +517,48 @@ namespace eager_search
                 std::vector<int> vals = state.get_unpacked_values();
                 certificate << "(";
                 first = true;
+
+                // TODO: not sure if it should be if-else or just if
                 if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
                 {
                     reachable_facts[id] = open_list->get_reachable_facts_open_list(eval_context, state);
-                    std::cout << "writing: ";
                     for (size_t i = 0; i < reachable_facts[id].size(); i++)
                     {
-
                         if (reachable_facts[id][i] == 0)
                         {
                             if (!first)
                             {
                                 certificate << "| ";
-                                std::cout << "| ";
                             }
                             certificate << "v" << to_string(i + 1) << " ";
-                            std::cout << "v" << to_string(i + 1) << " ";
                             first = false;
                         }
                     }
-                    std::cout << std::endl;
+                    certificate << ") & (";
                 }
-                else
+
+                for (size_t i = 0; i < varorder.size(); ++i)
                 {
-                    for (size_t i = 0; i < varorder.size(); ++i)
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                     {
-                        // variables start at 1 for dimacs format
-                        int var = varorder[i];
-                        for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                        if (vals[i] == j)
                         {
-                            if (vals[i] == j)
-                            {
-                                certificate << "!v" + to_string((fact_to_var[var][j] + 1)) << " ";
-                            }
-                            else
-                            {
-                                certificate << "v" + to_string(fact_to_var[var][j] + 1) << " ";
-                            }
-                            if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
-                            {
-                                certificate << "| ";
-                            }
+                            certificate << "!v" + to_string((fact_to_var[var][j] + 1)) << " ";
                         }
-                        if (i != varorder.size() - 1)
+                        else
+                        {
+                            certificate << "v" + to_string(fact_to_var[var][j] + 1) << " ";
+                        }
+                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
                         {
                             certificate << "| ";
                         }
+                    }
+                    if (i != varorder.size() - 1)
+                    {
+                        certificate << "| ";
                     }
                 }
                 certificate << ")";
@@ -603,32 +599,31 @@ namespace eager_search
                             first = false;
                         }
                     }
+                    certificate << ") & (";
                 }
-                else
+
+                for (size_t i = 0; i < varorder.size(); ++i)
                 {
-                    for (size_t i = 0; i < varorder.size(); ++i)
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                     {
-                        // variables start at 1 for dimacs format
-                        int var = varorder[i];
-                        for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                        if (vals[i] == j)
                         {
-                            if (vals[i] == j)
-                            {
-                                certificate << "!v" + to_string((fact_to_var[var][j] + 1 + fact_amount)) << " ";
-                            }
-                            else
-                            {
-                                certificate << "v" + to_string(fact_to_var[var][j] + 1 + fact_amount) << " ";
-                            }
-                            if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
-                            {
-                                certificate << "| ";
-                            }
+                            certificate << "!v" + to_string((fact_to_var[var][j] + 1 + fact_amount)) << " ";
                         }
-                        if (i != varorder.size() - 1)
+                        else
+                        {
+                            certificate << "v" + to_string(fact_to_var[var][j] + 1 + fact_amount) << " ";
+                        }
+                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
                         {
                             certificate << "| ";
                         }
+                    }
+                    if (i != varorder.size() - 1)
+                    {
+                        certificate << "| ";
                     }
                 }
 
@@ -669,32 +664,31 @@ namespace eager_search
                             first = false;
                         }
                     }
+                    certificate << ") | (";
                 }
-                else
+
+                for (size_t i = 0; i < varorder.size(); ++i)
                 {
-                    for (size_t i = 0; i < varorder.size(); ++i)
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
                     {
-                        // variables start at 1 for dimacs format
-                        int var = varorder[i];
-                        for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                        if (vals[i] == j)
                         {
-                            if (vals[i] == j)
-                            {
-                                certificate << "v" + to_string((fact_to_var[var][j] + 1)) << " ";
-                            }
-                            else
-                            {
-                                certificate << "!v" + to_string(fact_to_var[var][j] + 1) << " ";
-                            }
-                            if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
-                            {
-                                certificate << "& ";
-                            }
+                            certificate << "v" + to_string((fact_to_var[var][j] + 1)) << " ";
                         }
-                        if (i != varorder.size() - 1)
+                        else
+                        {
+                            certificate << "!v" + to_string(fact_to_var[var][j] + 1) << " ";
+                        }
+                        if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
                         {
                             certificate << "& ";
                         }
+                    }
+                    if (i != varorder.size() - 1)
+                    {
+                        certificate << "& ";
                     }
                 }
 
@@ -757,7 +751,6 @@ namespace eager_search
                 {
                     FactProxy f = pre[i];
                     certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
-                    // task_file << "PRE:" << fact_to_var[pre[i].get_variable().get_id()][pre[i].get_value()] + 1 << "\n";
                     certificate << "& ";
                 }
                 for (size_t i = 0; i < post.size(); ++i)
@@ -771,7 +764,6 @@ namespace eager_search
                     }
                     // add and del facts need to be primed -> add fact_amount
                     FactProxy f = post[i].get_fact();
-                    // certificate << "ADD:" << fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 << "\n";
                     certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " ";
                     certificate << "& ";
                     used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
@@ -784,7 +776,6 @@ namespace eager_search
                         {
                             continue;
                         }
-                        // certificate << "DEL:" << fact_to_var[f.get_variable().get_id()][j] + 1 << "\n";
                         certificate << "!v" + to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " ";
                         certificate << "& ";
                         used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
