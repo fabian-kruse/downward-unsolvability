@@ -582,7 +582,7 @@ namespace eager_search
         if (whole_formula)
         {
             std::ofstream certificate;
-            certificate.open(unsolvability_directory + "wholeproof.txt");
+            certificate.open(unsolvability_directory + "satproof.txt");
             // write compR, compR' and R formula
             certificate << "BC1.1\n";
             map<StateID, vector<int>> reachable_facts = write_formula(certificate, "compR", varorder, fact_to_var, 0, "|", "&", "", "!");
@@ -705,8 +705,7 @@ namespace eager_search
         else
         {
             std::ofstream main_proof_file;
-            const std::string dir = "";
-            main_proof_file.open(unsolvability_directory + dir + "mainproof.txt");
+            main_proof_file.open(unsolvability_directory + "mainproof.txt");
             main_proof_file << "c main proof file\n"
                                "c this file contains the backwards inductive certificate\n"
                                "p cnf " +
@@ -895,7 +894,6 @@ namespace eager_search
                 fact_to_var[var][j] = fact_amount++;
             }
         }
-
         std::ofstream task_file;
         task_file.open(unsolvability_directory + "task.txt");
         task_file << "begin_atoms:" << fact_amount << "\n";
