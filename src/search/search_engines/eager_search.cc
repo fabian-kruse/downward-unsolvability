@@ -701,15 +701,16 @@ namespace eager_search
             }
             certificate << "));\n";
             certificate << "ASSIGN f;";
+            certificate.close();
         }
         else
         {
-            std::ofstream main_proof_file;
-            main_proof_file.open(unsolvability_directory + "satproof.txt");
-            main_proof_file << "c main proof file\n"
-                               "c this file contains the backwards inductive certificate\n"
-                               "p cnf " +
-                                   std::to_string(fact_amount) + " " + std::to_string(state_registry.size()) + "\n";
+            std::ofstream certificate;
+            certificate.open(unsolvability_directory + "satproof.txt");
+            certificate << "c main proof file\n"
+                           "c this file contains the backwards inductive certificate\n"
+                           "p cnf " +
+                               std::to_string(fact_amount) + " " + std::to_string(state_registry.size()) + "\n";
 
             // certificate should represent complement of all reachable states
             //-> includes the complement of all states reached -> CNF of all states reached
@@ -730,17 +731,17 @@ namespace eager_search
                     {
                         if (vals[i] == j)
                         {
-                            main_proof_file << -(fact_to_var[var][j] + 1) << " ";
+                            certificate << -(fact_to_var[var][j] + 1) << " ";
                         }
                         else
                         {
-                            main_proof_file << (fact_to_var[var][j] + 1) << " ";
+                            certificate << (fact_to_var[var][j] + 1) << " ";
                         }
                     }
                 }
-                main_proof_file << "0\n";
+                certificate << "0\n";
             }
-            main_proof_file.close();
+            certificate.close();
         }
 
         std::cout << "done writing SAT-proof" << std::endl;
