@@ -197,7 +197,6 @@ namespace tiebreaking_open_list
                 }
             }
         }
-        std::cout << "calling from tiebreaking.cc";
         return vector<int>();
     }
 
