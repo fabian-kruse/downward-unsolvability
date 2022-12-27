@@ -647,7 +647,7 @@ namespace eager_search
                     {
                         std::cout << "CONDITIONAL EFFECTS, ABORT!";
                         certificate.close();
-                        std::remove("wholeproof.txt");
+                        std::remove("satproof.txt");
                         utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
                     }
                     // add and del facts need to be primed -> add fact_amount
@@ -705,7 +705,7 @@ namespace eager_search
         else
         {
             std::ofstream main_proof_file;
-            main_proof_file.open(unsolvability_directory + "mainproof.txt");
+            main_proof_file.open(unsolvability_directory + "satproof.txt");
             main_proof_file << "c main proof file\n"
                                "c this file contains the backwards inductive certificate\n"
                                "p cnf " +
@@ -876,7 +876,7 @@ namespace eager_search
         write_unsolvability_task_file(varorder);
 
         double writing_end = utils::g_timer();
-        std::cout << "Time for writing unsolvability proof: "
+        std::cout << "Time for writing unsolvability satproof: "
                   << writing_end - writing_start << std::endl;
     }
 
