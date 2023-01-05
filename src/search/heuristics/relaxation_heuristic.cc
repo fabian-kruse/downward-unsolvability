@@ -406,7 +406,8 @@ namespace relaxation_heuristic
         vector<int> vals = state.get_unpacked_values();
         for (size_t i = 0; i < vals.size(); i++)
         {
-            reachable_facts[fact + vals[i]] = 1;
+            // do not need to do this, since facts are in queue
+            //  reachable_facts[fact + vals[i]] = 1;
             fact += task_proxy.get_variables()[i].get_domain_size();
         }
         std::vector<PropID> prop_to_fact(num_facts, -1);
@@ -443,7 +444,10 @@ namespace relaxation_heuristic
             PropID prop_id = top_pair.second;
             Proposition *prop = get_proposition(prop_id);
             // reached fact with that prop_id
-            reachable_facts[prop_id] = 1;
+            // if reached already, continue
+            if (reachable_facts[prop_to_fact[prop_id]] == 1)
+                continue;
+            reachable_facts[prop_to_fact[prop_id]] = 1;
             for (OpID op_id : precondition_of_pool.get_slice(
                      prop->precondition_of, prop->num_precondition_occurences))
             {

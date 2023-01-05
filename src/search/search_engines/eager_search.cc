@@ -227,6 +227,7 @@ namespace eager_search
                     int new_h = eval_context.get_evaluator_value_or_infinity(lazy_evaluator.get());
                     if (open_list->is_dead_end(eval_context))
                     {
+                        std::cout << "dead end by lazy_eval" << std::endl;
                         node->mark_as_dead_end();
                         statistics.inc_dead_ends();
                         continue;
@@ -593,7 +594,7 @@ namespace eager_search
             certificate << "BC1.1\n";
             map<StateID, vector<int>> reachable_facts = write_formula(certificate, "compR", varorder, fact_to_var, 0, "|", "&", "", "!");
             write_formula(certificate, "compR'", varorder, fact_to_var, fact_amount, "|", "&", "", "!", reachable_facts);
-            // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
+            write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
             //  write initial state formula
             certificate << "init:=(";
             for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
