@@ -426,12 +426,12 @@ namespace eager_search
                                                                    std::map<StateID, std::vector<int>> reachable_facts /*= std::map<StateID, std::vector<int>>()*/)
     {
         bool first;
-        certificate << formula_name + " := ";
-        certificate << "( ";
         size_t state_counter = 0;
         bool get_reachable_facts = reachable_facts.empty();
         for (StateID id : state_registry)
         {
+            certificate << formula_name + "_" + to_string(state_counter) + ":=";
+            certificate << "(";
             State state = state_registry.lookup_state(id);
             EvaluationContext eval_context(state,
                                            0,
@@ -439,7 +439,7 @@ namespace eager_search
             state.unpack();
             std::vector<int> vals = state.get_unpacked_values();
             first = true;
-            certificate << "(";
+            // this part handles dead-ends in hmax()
             if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
             {
                 if (get_reachable_facts)
@@ -452,13 +452,14 @@ namespace eager_search
                     {
                         if (!first)
                         {
-                            certificate << inner_separator + " ";
+                            certificate << inner_separator;
                         }
-                        certificate << primary_sign + "v" << to_string(i + 1 + offset) << " ";
+                        certificate << primary_sign + "v" << to_string(i + 1 + offset);
                         first = false;
                     }
                 }
             }
+            // this part handles regular states
             else
             {
                 for (size_t i = 0; i < varorder.size(); ++i)
@@ -469,28 +470,33 @@ namespace eager_search
                     {
                         if (vals[i] == j)
                         {
-                            certificate << secondary_sign + "v" + to_string((fact_to_var[var][j] + 1 + offset)) << " ";
+                            certificate << secondary_sign + "v" + to_string((fact_to_var[var][j] + 1 + offset));
                         }
                         else
                         {
-                            certificate << primary_sign + "v" + to_string(fact_to_var[var][j] + 1 + offset) << " ";
+                            certificate << primary_sign + "v" + to_string(fact_to_var[var][j] + 1 + offset);
                         }
                         if (j != task_proxy.get_variables()[var].get_domain_size() - 1)
                         {
-                            certificate << inner_separator + " ";
+                            certificate << inner_separator;
                         }
                     }
                     if (i != varorder.size() - 1)
                     {
-                        certificate << inner_separator + " ";
+                        certificate << inner_separator;
                     }
                 }
             }
-            certificate << ")";
+            certificate << ");\n";
             state_counter++;
-            if (state_counter != state_registry.size())
+        }
+        certificate << formula_name + ":=(";
+        for (size_t i = 0; i < state_counter; i++)
+        {
+            certificate << formula_name + "_" + to_string(i);
+            if (i != state_counter - 1)
             {
-                certificate << " " + outer_separator + " ";
+                certificate << outer_separator;
             }
         }
         certificate << ");\n";
@@ -587,42 +593,42 @@ namespace eager_search
             certificate << "BC1.1\n";
             map<StateID, vector<int>> reachable_facts = write_formula(certificate, "compR", varorder, fact_to_var, 0, "|", "&", "", "!");
             write_formula(certificate, "compR'", varorder, fact_to_var, fact_amount, "|", "&", "", "!", reachable_facts);
-            write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
-            // write initial state formula
-            certificate << "init := ( ";
+            // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
+            //  write initial state formula
+            certificate << "init:=(";
             for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
             {
                 for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
                 {
                     if (task_proxy.get_initial_state()[i].get_value() == j)
                     {
-                        certificate << "v" + to_string((fact_to_var[i][j] + 1)) << " ";
+                        certificate << "v" + to_string((fact_to_var[i][j] + 1));
                     }
                     else
                     {
-                        certificate << "!v" + to_string(fact_to_var[i][j] + 1) << " ";
+                        certificate << "!v" + to_string(fact_to_var[i][j] + 1);
                     }
                     if (j != task_proxy.get_variables()[i].get_domain_size() - 1)
                     {
-                        certificate << "& ";
+                        certificate << "&";
                     }
                 }
                 if (i != task_proxy.get_variables().size() - 1)
                 {
-                    certificate << "& ";
+                    certificate << "&";
                 }
             }
             certificate << ");\n";
 
             // write goal formula
-            certificate << "goal := ( ";
+            certificate << "goal:=(";
             for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
             {
                 FactProxy f = task_proxy.get_goals()[i];
-                certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
+                certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
                 if (i != task_proxy.get_goals().size() - 1)
                 {
-                    certificate << "& ";
+                    certificate << "&";
                 }
             }
             certificate << ");\n";
@@ -631,15 +637,15 @@ namespace eager_search
             for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
             {
                 OperatorProxy op = task_proxy.get_operators()[op_index];
-                certificate << "tau_a" + to_string(op_index) + " := ( ";
+                certificate << "tau_a" + to_string(op_index) + ":=(";
                 PreconditionsProxy pre = op.get_preconditions();
                 EffectsProxy post = op.get_effects();
 
                 for (size_t i = 0; i < pre.size(); ++i)
                 {
                     FactProxy f = pre[i];
-                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
-                    certificate << "& ";
+                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
+                    certificate << "&";
                 }
                 for (size_t i = 0; i < post.size(); ++i)
                 {
@@ -652,8 +658,8 @@ namespace eager_search
                     }
                     // add and del facts need to be primed -> add fact_amount
                     FactProxy f = post[i].get_fact();
-                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " ";
-                    certificate << "& ";
+                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount);
+                    certificate << "&";
                     used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
 
                     //  all other facts from this FDR variable are set to false
@@ -664,8 +670,8 @@ namespace eager_search
                         {
                             continue;
                         }
-                        certificate << "!v" + to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " ";
-                        certificate << "& ";
+                        certificate << "!v" + to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount);
+                        certificate << "&";
                         used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
                     }
                 }
@@ -680,9 +686,9 @@ namespace eager_search
                     }
                     if (!first)
                     {
-                        certificate << "& ";
+                        certificate << "&";
                     }
-                    certificate << "(v" + to_string(j + 1 + fact_amount) + " == " + "v" + to_string(j + 1) + ") ";
+                    certificate << "(v" + to_string(j + 1 + fact_amount) + "==" + "v" + to_string(j + 1) + ")";
                     first = false;
                 }
                 certificate << ");\n";
@@ -690,13 +696,13 @@ namespace eager_search
 
             // write whole formula
             // notice: it is better to use !compR instead of R
-            certificate << "f := (compR & init) | (!compR & goal ) | (!compR & compR' & (";
+            certificate << "f:=(compR&init)|(!compR&goal)|(!compR & compR'&(";
             for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
             {
-                certificate << "tau_a" + to_string(op_index) + " ";
+                certificate << "tau_a" + to_string(op_index);
                 if (op_index != task_proxy.get_operators().size() - 1)
                 {
-                    certificate << "| ";
+                    certificate << "|";
                 }
             }
             certificate << "));\n";
