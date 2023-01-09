@@ -431,7 +431,7 @@ namespace eager_search
         bool get_reachable_facts = reachable_facts.empty();
         for (StateID id : state_registry)
         {
-            certificate << formula_name + "_" + to_string(state_counter) + ":=";
+            certificate << formula_name + to_string(state_counter) + ":=";
             certificate << "(";
             State state = state_registry.lookup_state(id);
             EvaluationContext eval_context(state,
@@ -494,7 +494,7 @@ namespace eager_search
         certificate << formula_name + ":=(";
         for (size_t i = 0; i < state_counter; i++)
         {
-            certificate << formula_name + "_" + to_string(i);
+            certificate << formula_name + to_string(i);
             if (i != state_counter - 1)
             {
                 certificate << outer_separator;
@@ -592,10 +592,10 @@ namespace eager_search
             certificate.open(unsolvability_directory + "satproof.txt");
             // write compR, compR' and R formula
             certificate << "BC1.1\n";
-            map<StateID, vector<int>> reachable_facts = write_formula(certificate, "compR", varorder, fact_to_var, 0, "|", "&", "", "!");
-            write_formula(certificate, "compR'", varorder, fact_to_var, fact_amount, "|", "&", "", "!", reachable_facts);
-            write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
-            //  write initial state formula
+            map<StateID, vector<int>> reachable_facts = write_formula(certificate, "cR", varorder, fact_to_var, 0, "|", "&", "", "!");
+            write_formula(certificate, "cRp", varorder, fact_to_var, fact_amount, "|", "&", "", "!", reachable_facts);
+            // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
+            //   write initial state formula
             certificate << "init:=(";
             for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
             {
@@ -638,7 +638,7 @@ namespace eager_search
             for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
             {
                 OperatorProxy op = task_proxy.get_operators()[op_index];
-                certificate << "tau_a" + to_string(op_index) + ":=(";
+                certificate << "a" + to_string(op_index) + ":=(";
                 PreconditionsProxy pre = op.get_preconditions();
                 EffectsProxy post = op.get_effects();
 
@@ -697,10 +697,10 @@ namespace eager_search
 
             // write whole formula
             // notice: it is better to use !compR instead of R
-            certificate << "f:=(compR&init)|(!compR&goal)|(!compR & compR'&(";
+            certificate << "f:=(cR&init)|(!cR&goal)|(!cR & cRp&(";
             for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
             {
-                certificate << "tau_a" + to_string(op_index);
+                certificate << "a" + to_string(op_index);
                 if (op_index != task_proxy.get_operators().size() - 1)
                 {
                     certificate << "|";
