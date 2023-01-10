@@ -507,7 +507,6 @@ namespace eager_search
     void EagerSearch::write_unsolvability_proof()
     {
         double writing_start = utils::g_timer();
-        UnsolvabilityManager unsolvmgr(unsolvability_directory, task);
         std::vector<int> varorder(task_proxy.get_variables().size());
         for (size_t i = 0; i < varorder.size(); ++i)
         {
@@ -518,7 +517,7 @@ namespace eager_search
           TODO: asking if the initial node is new seems wrong, but that is
           how the search handles a dead initial state
          */
-        if (search_space.get_node(state_registry.get_initial_state()).is_new())
+        /* if (search_space.get_node(state_registry.get_initial_state()).is_new())
         {
             const State &init_state = state_registry.get_initial_state();
             EvaluationContext eval_context(init_state,
@@ -538,38 +537,14 @@ namespace eager_search
             /*
               Writing the task file at the end minimizes the chances that both task and
               proof file are there but the planner could not finish writing them.
-             */
+
             write_unsolvability_task_file(varorder);
 
             double writing_end = utils::g_timer();
             std::cout << "Time for writing unsolvability proof: "
                       << writing_end - writing_start << std::endl;
             return;
-        }
-
-        struct MergeTreeEntry
-        {
-            SetExpression set;
-            Judgment justification;
-            int de_pos_begin;
-            int depth;
-        };
-
-        CuddManager manager(task);
-        std::vector<StateID> dead_ends;
-        int dead_end_amount = statistics.get_dead_ends();
-        dead_ends.reserve(dead_end_amount);
-
-        std::vector<MergeTreeEntry> merge_tree;
-        if (dead_end_amount > 0)
-        {
-            merge_tree.resize(ceil(log2(dead_end_amount + 1)));
-        }
-        // mt_pos is the index of the first unused entry of merge_tree
-        // int mt_pos = 0;
-
-        CuddBDD expanded = CuddBDD(&manager, false);
-        CuddBDD dead = CuddBDD(&manager, false);
+        } */
 
         std::vector<std::vector<int>> fact_to_var(varorder.size(), std::vector<int>());
         std::vector<bool> used_vars_in_operator;
