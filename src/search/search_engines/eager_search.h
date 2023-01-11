@@ -55,6 +55,36 @@ namespace eager_search
                                                           std::string secondary_sign,
                                                           std::map<StateID, std::vector<int>> reachable_facts = std::map<StateID, std::vector<int>>());
 
+        std::map<StateID, std::vector<int>> write_formula_dimacs(std::ofstream &certificate,
+                                                                 std::string formula_name,
+                                                                 std::vector<int> varorder,
+                                                                 std::vector<std::vector<int>> fact_to_var,
+                                                                 int offset, std::string inner_separator,
+                                                                 std::string outer_separator,
+                                                                 std::string primary_sign,
+                                                                 std::string secondary_sign,
+                                                                 int fact_amount,
+                                                                 std::map<StateID, std::vector<int>> reachable_facts = std::map<StateID, std::vector<int>>());
+        void write_init_dimacs(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var, int init_formula);
+        void write_goal_dimacs(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var, int goal_formula);
+        std::tuple<std::vector<int>, int> write_transition_formulas_dimacs(std::ofstream &certificate,
+                                                                           std::vector<std::vector<int>> fact_to_var,
+                                                                           int fact_amount,
+                                                                           int current_variable);
+        void write_final_formula_dimacs(std::ofstream &certificate,
+                                        int init_formula,
+                                        int cR_formula,
+                                        int cRp_formula,
+                                        int goal_formula,
+                                        int current_variable,
+                                        std::vector<int> operator_formulas);
+        void write_init(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var);
+        void write_goal(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var);
+        void write_transition_formulas(std::ofstream &certificate,
+                                       std::vector<std::vector<int>> fact_to_var,
+                                       int fact_amount);
+        void write_final_formula(std::ofstream &certificate);
+
     public:
         explicit EagerSearch(const options::Options &opts);
         virtual ~EagerSearch() = default;

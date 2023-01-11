@@ -504,6 +504,442 @@ namespace eager_search
         return reachable_facts;
     }
 
+    std::map<StateID, std::vector<int>> EagerSearch::write_formula_dimacs(std::ofstream &certificate,
+                                                                          std::string formula_name,
+                                                                          std::vector<int> varorder,
+                                                                          std::vector<std::vector<int>> fact_to_var,
+                                                                          int offset, std::string inner_separator,
+                                                                          std::string outer_separator,
+                                                                          std::string primary_sign,
+                                                                          std::string secondary_sign,
+                                                                          int fact_amount,
+                                                                          std::map<StateID, std::vector<int>> reachable_facts /*= std::map<StateID, std::vector<int>>()*/)
+    {
+        size_t state_counter = 0;
+        bool get_reachable_facts = reachable_facts.empty();
+        vector<int> facts = vector<int>(fact_amount, 0);
+        // setup variables for state-formulas
+        vector<int> state_formulas = vector<int>(state_registry.size(), 0);
+        int base = 2 * fact_amount + 1;
+        if (offset != 0)
+        {
+            base = base + state_registry.size();
+        }
+
+        for (size_t i = 0; i < state_registry.size(); i++)
+        {
+            state_formulas[i] = i + base;
+        }
+
+        for (StateID id : state_registry)
+        {
+            State state = state_registry.lookup_state(id);
+            EvaluationContext eval_context(state,
+                                           0,
+                                           false, &statistics);
+            state.unpack();
+            std::vector<int> vals = state.get_unpacked_values();
+
+            // this part handles dead-ends in hmax()
+            if (search_space.get_node(state).is_dead_end() && eval_context.is_evaluator_value_infinite(f_evaluator.get()))
+            {
+                if (get_reachable_facts)
+                {
+                    reachable_facts[id] = open_list->get_reachable_facts_open_list(eval_context, state);
+                }
+                for (size_t i = 0; i < reachable_facts[id].size(); i++)
+                {
+                    if (reachable_facts[id][i] == 0)
+                    {
+                        certificate << primary_sign + to_string(i + 1 + offset) + inner_separator;
+                    }
+                }
+                certificate << secondary_sign + to_string(state_formulas[state_counter]) + outer_separator;
+                for (size_t i = 0; i < reachable_facts[id].size(); i++)
+                {
+                    if (reachable_facts[id][i] == 0)
+                    {
+                        certificate << secondary_sign + to_string(i + 1 + offset) + inner_separator + primary_sign + to_string(state_formulas[state_counter]) + outer_separator;
+                    }
+                }
+            }
+            // this part handles regular states
+            else
+            {
+                // this part generates the state-formula
+                for (size_t i = 0; i < varorder.size(); ++i)
+                {
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    {
+                        if (vals[i] == j)
+                        {
+                            certificate << secondary_sign + to_string((fact_to_var[var][j] + 1 + offset)) + inner_separator;
+                        }
+                        else
+                        {
+                            certificate << primary_sign + to_string(fact_to_var[var][j] + 1 + offset) + inner_separator;
+                        }
+                    }
+                }
+                certificate << secondary_sign + to_string(state_formulas[state_counter]);
+                certificate << outer_separator;
+                // this part generates the formula for each fact with the summarizing state variable
+                for (size_t i = 0; i < varorder.size(); ++i)
+                {
+                    // variables start at 1 for dimacs format
+                    int var = varorder[i];
+                    for (int j = 0; j < task_proxy.get_variables()[var].get_domain_size(); ++j)
+                    {
+                        if (vals[i] == j)
+                        {
+                            certificate << primary_sign;
+                        }
+                        else
+                        {
+                            certificate << secondary_sign;
+                        }
+                        certificate << to_string(fact_to_var[var][j] + 1 + offset) + inner_separator;
+                        certificate << primary_sign + to_string(state_formulas[state_counter]);
+                        certificate << outer_separator;
+                    }
+                }
+            }
+            state_counter++;
+        }
+        int summarizing_variable = 1 + 2 * fact_amount + 2 * state_counter;
+        if (offset != 0)
+        {
+            summarizing_variable += 1;
+        }
+
+        // this part generates the summarizing formula
+        for (size_t i = 0; i < state_counter; i++)
+        {
+            certificate << secondary_sign + to_string(state_formulas[i]);
+            certificate << inner_separator;
+        }
+        certificate << primary_sign + to_string(summarizing_variable);
+        certificate << outer_separator;
+        for (size_t i = 0; i < state_counter; i++)
+        {
+            certificate << primary_sign + to_string(state_formulas[i]);
+            certificate << inner_separator + secondary_sign + to_string(summarizing_variable);
+            certificate << outer_separator;
+        }
+        // certificate << outer_separator;
+        return reachable_facts;
+    }
+
+    void EagerSearch::write_init(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var)
+    {
+        certificate << "init:=(";
+        for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
+        {
+            for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
+            {
+                if (task_proxy.get_initial_state()[i].get_value() != j)
+                {
+                    certificate << "!";
+                }
+                certificate << "v" + to_string((fact_to_var[i][j] + 1));
+
+                if (j != task_proxy.get_variables()[i].get_domain_size() - 1)
+                {
+                    certificate << "&";
+                }
+            }
+            if (i != task_proxy.get_variables().size() - 1)
+            {
+                certificate << "&";
+            }
+        }
+        certificate << ");\n";
+    }
+
+    void EagerSearch::write_init_dimacs(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var, int init_formula)
+    {
+        for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
+        {
+            for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
+            {
+                if (task_proxy.get_initial_state()[i].get_value() == j)
+                {
+                    certificate << "-";
+                }
+                certificate << to_string(fact_to_var[i][j] + 1) << " ";
+            }
+        }
+        certificate << to_string(init_formula) << " 0\n";
+        for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
+        {
+            for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
+            {
+                if (task_proxy.get_initial_state()[i].get_value() != j)
+                {
+                    certificate << "-";
+                }
+                certificate << to_string(fact_to_var[i][j] + 1) << " -" << to_string(init_formula) << " 0\n";
+            }
+        }
+    }
+
+    void EagerSearch::write_goal(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var)
+    {
+        certificate << "goal:=(";
+        for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
+        {
+            FactProxy f = task_proxy.get_goals()[i];
+            certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
+            if (i != task_proxy.get_goals().size() - 1)
+            {
+                certificate << "&";
+            }
+        }
+        certificate << ");\n";
+    }
+
+    void EagerSearch::write_goal_dimacs(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var, int goal_formula)
+    {
+        for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
+        {
+            FactProxy f = task_proxy.get_goals()[i];
+            certificate << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
+        }
+        certificate << to_string(goal_formula) << " 0\n";
+        for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
+        {
+            FactProxy f = task_proxy.get_goals()[i];
+            certificate << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " -" << to_string(goal_formula) << " 0\n";
+        }
+    }
+
+    void EagerSearch::write_transition_formulas(std::ofstream &certificate, std::vector<std::vector<int>> fact_to_var, int fact_amount)
+    {
+        // write transition formulas
+        for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
+        {
+            vector<bool> used_vars_in_operator = vector<bool>(fact_amount, false);
+            OperatorProxy op = task_proxy.get_operators()[op_index];
+            certificate << "a" + to_string(op_index) + ":=(";
+            PreconditionsProxy pre = op.get_preconditions();
+            EffectsProxy post = op.get_effects();
+            for (size_t i = 0; i < pre.size(); ++i)
+            {
+                FactProxy f = pre[i];
+                certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
+                certificate << "&";
+            }
+            for (size_t i = 0; i < post.size(); ++i)
+            {
+                if (!post[i].get_conditions().empty())
+                {
+                    std::cout << "CONDITIONAL EFFECTS, ABORT!";
+                    certificate.close();
+                    std::remove("satproof.txt");
+                    utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
+                }
+                // add and del facts need to be primed -> add fact_amount
+                FactProxy f = post[i].get_fact();
+                certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount);
+                certificate << "&";
+                used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
+
+                //  all other facts from this FDR variable are set to false
+                //  TODO: can we make this more compact / smarter?
+                for (int j = 0; j < f.get_variable().get_domain_size(); j++)
+                {
+                    if (j == f.get_value())
+                    {
+                        continue;
+                    }
+                    certificate << "!v" + to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount);
+                    certificate << "&";
+                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
+                }
+            }
+            bool first = true;
+            for (size_t j = 0; j < used_vars_in_operator.size(); j++)
+            {
+                if (used_vars_in_operator[j])
+                {
+                    continue;
+                }
+                if (!first)
+                {
+                    certificate << "&";
+                }
+                certificate << "(v" + to_string(j + 1 + fact_amount) + "==" + "v" + to_string(j + 1) + ")";
+                first = false;
+            }
+            certificate << ");\n";
+        }
+    }
+
+    std::tuple<vector<int>, int> EagerSearch::write_transition_formulas_dimacs(std::ofstream &certificate,
+                                                                               std::vector<std::vector<int>> fact_to_var,
+                                                                               int fact_amount,
+                                                                               int current_variable)
+    {
+        vector<int> operator_formulas = vector<int>(task_proxy.get_operators().size());
+        // write transition formulas
+        for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
+        {
+            vector<bool> used_vars_in_operator = vector<bool>(fact_amount, false);
+            current_variable++;
+            operator_formulas[op_index] = current_variable;
+            OperatorProxy op = task_proxy.get_operators()[op_index];
+            PreconditionsProxy pre = op.get_preconditions();
+            EffectsProxy post = op.get_effects();
+            certificate << to_string(operator_formulas[op_index]) << " ";
+            for (size_t i = 0; i < pre.size(); ++i)
+            {
+                FactProxy f = pre[i];
+                certificate << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
+            }
+            for (size_t i = 0; i < post.size(); ++i)
+            {
+                if (!post[i].get_conditions().empty())
+                {
+                    std::cout << "CONDITIONAL EFFECTS, ABORT!";
+                    certificate.close();
+                    std::remove("satproof.txt");
+                    utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
+                }
+                // add and del facts need to be primed -> add fact_amount
+                FactProxy f = post[i].get_fact();
+                certificate << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " ";
+                used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
+
+                //  all other facts from this FDR variable are set to false
+                //  TODO: can we make this more compact / smarter?
+                for (int j = 0; j < f.get_variable().get_domain_size(); j++)
+                {
+                    if (j == f.get_value())
+                    {
+                        continue;
+                    }
+                    certificate << to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " ";
+                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
+                }
+            }
+            vector<int> unused_vars_formulas = vector<int>(used_vars_in_operator.size(), 0);
+            for (size_t j = 0; j < used_vars_in_operator.size(); j++)
+            {
+                if (used_vars_in_operator[j])
+                {
+                    continue;
+                }
+                current_variable++;
+                unused_vars_formulas[j] = current_variable;
+                certificate << "-" << to_string(current_variable) << " ";
+            }
+            certificate << "0\n";
+            used_vars_in_operator = vector<bool>(fact_amount, false);
+            for (size_t i = 0; i < pre.size(); ++i)
+            {
+                FactProxy f = pre[i];
+                certificate << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+            }
+            for (size_t i = 0; i < post.size(); ++i)
+            {
+                if (!post[i].get_conditions().empty())
+                {
+                    std::cout << "CONDITIONAL EFFECTS, ABORT!";
+                    certificate.close();
+                    std::remove("satproof.txt");
+                    utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
+                }
+                // add and del facts need to be primed -> add fact_amount
+                FactProxy f = post[i].get_fact();
+                certificate << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+                used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
+
+                //  all other facts from this FDR variable are set to false
+                //  TODO: can we make this more compact / smarter?
+                for (int j = 0; j < f.get_variable().get_domain_size(); j++)
+                {
+                    if (j == f.get_value())
+                    {
+                        continue;
+                    }
+                    certificate << "-" << to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
+                }
+            }
+            for (size_t j = 0; j < used_vars_in_operator.size(); j++)
+            {
+                if (used_vars_in_operator[j])
+                {
+                    continue;
+                }
+                if (unused_vars_formulas[j] == 0)
+                {
+                    std::cout << "should never happen";
+                }
+                certificate << to_string(unused_vars_formulas[j]) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+                certificate << "-" << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
+                certificate << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
+                certificate << "-" << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
+                certificate << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
+            }
+        }
+        return make_tuple(operator_formulas, current_variable);
+    }
+
+    void EagerSearch::write_final_formula(std::ofstream &certificate)
+    {
+        certificate << "f:=(cR&init)|(!cR&goal)|(!cR & cRp&(";
+        for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
+        {
+            certificate << "a" + to_string(op_index);
+            if (op_index != task_proxy.get_operators().size() - 1)
+            {
+                certificate << "|";
+            }
+        }
+        certificate << "));\n";
+        certificate << "ASSIGN f;";
+    }
+
+    void EagerSearch::write_final_formula_dimacs(std::ofstream &certificate,
+                                                 int init_formula,
+                                                 int cR_formula,
+                                                 int cRp_formula,
+                                                 int goal_formula,
+                                                 int current_variable,
+                                                 vector<int> operator_formulas)
+    {
+        current_variable++;
+        int static_formula = current_variable;
+        certificate << "-" << to_string(init_formula) << " -" << to_string(cR_formula) << " " << to_string(static_formula) << " 0\n";
+        certificate << "-" << to_string(goal_formula) << " " << to_string(cR_formula) << " " << to_string(static_formula) << " 0\n";
+        certificate << to_string(goal_formula) << " " << to_string(init_formula) << " -" << to_string(static_formula) << " 0\n";
+        certificate << to_string(init_formula) << " -" << to_string(cR_formula) << " -" << to_string(static_formula) << " 0\n";
+        certificate << to_string(goal_formula) << " " << to_string(cR_formula) << " -" << to_string(static_formula) << " 0\n";
+
+        // then append the dynamic part (depending on operators)
+        current_variable++;
+        int final_formula = current_variable;
+
+        certificate << "-" << to_string(static_formula) << " " << to_string(final_formula) << " 0\n";
+        certificate << to_string(static_formula) << " " << to_string(cRp_formula) << " -" << to_string(final_formula) << " 0\n";
+        certificate << to_string(static_formula) << " -" << to_string(cR_formula) << " -" << to_string(final_formula) << " 0\n";
+
+        certificate << to_string(static_formula) << " -" << to_string(final_formula) << " ";
+        for (int op : operator_formulas)
+        {
+            certificate << to_string(op) << " ";
+        }
+        certificate << "0\n";
+        for (int op : operator_formulas)
+        {
+            certificate << "-" << to_string(op) << " " << to_string(cR_formula) << " -" << to_string(cRp_formula) << " " << to_string(final_formula) << " 0\n";
+        }
+        certificate << to_string(final_formula) << " 0\n";
+    }
+
     void EagerSearch::write_unsolvability_proof()
     {
         double writing_start = utils::g_timer();
@@ -516,8 +952,8 @@ namespace eager_search
         /*
           TODO: asking if the initial node is new seems wrong, but that is
           how the search handles a dead initial state
-         */
-        /* if (search_space.get_node(state_registry.get_initial_state()).is_new())
+
+         if (search_space.get_node(state_registry.get_initial_state()).is_new())
         {
             const State &init_state = state_registry.get_initial_state();
             EvaluationContext eval_context(init_state,
@@ -534,7 +970,7 @@ namespace eager_search
             std::cout << "dumping bdds" << std::endl;
             unsolvmgr.dump_BDDs();
 
-            /*
+
               Writing the task file at the end minimizes the chances that both task and
               proof file are there but the planner could not finish writing them.
 
@@ -559,19 +995,43 @@ namespace eager_search
                 used_vars_in_operator.push_back(false);
             }
         }
-
         bool whole_formula = true;
+        bool write_dimacs = true;
+
+        if (write_dimacs)
+        {
+            std::ofstream certificate;
+            certificate.open(unsolvability_directory + "dimacs.txt");
+            certificate << "p cnf 1 1\n";
+            int cR_formula = 1 + fact_amount * 2 + 2 * state_registry.size();
+            int cRp_formula = 2 + fact_amount * 2 + 2 * state_registry.size();
+            int init_formula = 3 + fact_amount * 2 + 2 * state_registry.size();
+            int goal_formula = 4 + fact_amount * 2 + 2 * state_registry.size();
+            map<StateID, vector<int>> reachable_facts = write_formula_dimacs(certificate, "cR", varorder, fact_to_var, 0, " ", " 0\n", "", "-", fact_amount);
+            write_formula_dimacs(certificate, "cRp", varorder, fact_to_var, fact_amount, " ", " 0\n", "", "-", fact_amount, reachable_facts);
+            write_init_dimacs(certificate, fact_to_var, init_formula);
+            write_goal_dimacs(certificate, fact_to_var, goal_formula);
+            std::tuple<vector<int>, int> tmp = write_transition_formulas_dimacs(certificate, fact_to_var, fact_amount, goal_formula);
+            write_final_formula_dimacs(certificate, init_formula, cR_formula, cRp_formula, goal_formula, std::get<1>(tmp), std::get<0>(tmp));
+        }
+
         if (whole_formula)
         {
             std::ofstream certificate;
+
             certificate.open(unsolvability_directory + "satproof.txt");
             // write compR, compR' and R formula
             certificate << "BC1.1\n";
             map<StateID, vector<int>> reachable_facts = write_formula(certificate, "cR", varorder, fact_to_var, 0, "|", "&", "", "!");
             write_formula(certificate, "cRp", varorder, fact_to_var, fact_amount, "|", "&", "", "!", reachable_facts);
+            write_init(certificate, fact_to_var);
+            write_goal(certificate, fact_to_var);
+            write_transition_formulas(certificate, fact_to_var, fact_amount);
+            write_final_formula(certificate);
             // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
             //   write initial state formula
-            certificate << "init:=(";
+
+            /* certificate << "init:=(";
             for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
             {
                 for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
@@ -579,22 +1039,41 @@ namespace eager_search
                     if (task_proxy.get_initial_state()[i].get_value() == j)
                     {
                         certificate << "v" + to_string((fact_to_var[i][j] + 1));
+                        test << "-" << to_string(fact_to_var[i][j] + 1);
                     }
                     else
                     {
                         certificate << "!v" + to_string(fact_to_var[i][j] + 1);
+                        test << to_string(fact_to_var[i][j] + 1);
                     }
+                    test << " ";
                     if (j != task_proxy.get_variables()[i].get_domain_size() - 1)
                     {
                         certificate << "&";
                     }
                 }
+
                 if (i != task_proxy.get_variables().size() - 1)
                 {
                     certificate << "&";
                 }
             }
+            test << to_string(init_formula) << " 0\n";
             certificate << ");\n";
+            for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
+            {
+                for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
+                {
+                    if (task_proxy.get_initial_state()[i].get_value() == j)
+                    {
+                        test << to_string(fact_to_var[i][j] + 1) << " -" << to_string(init_formula) << " 0\n";
+                    }
+                    else
+                    {
+                        test << "-" << to_string(fact_to_var[i][j] + 1) << " -" << to_string(init_formula) << " 0\n";
+                    }
+                }
+            }
 
             // write goal formula
             certificate << "goal:=(";
@@ -602,26 +1081,38 @@ namespace eager_search
             {
                 FactProxy f = task_proxy.get_goals()[i];
                 certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
+                test << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
                 if (i != task_proxy.get_goals().size() - 1)
                 {
                     certificate << "&";
                 }
             }
+            test << to_string(goal_formula) << " 0\n";
             certificate << ");\n";
-
+            for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
+            {
+                FactProxy f = task_proxy.get_goals()[i];
+                test << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " -" << to_string(goal_formula) << " 0\n";
+            }
+            int current_variable = goal_formula;
+            vector<int> operator_formulas = vector<int>(task_proxy.get_operators().size());
             // write transition formulas
             for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
             {
+                used_vars_in_operator = vector<bool>(fact_amount, false);
+                current_variable++;
+                operator_formulas[op_index] = current_variable;
                 OperatorProxy op = task_proxy.get_operators()[op_index];
                 certificate << "a" + to_string(op_index) + ":=(";
                 PreconditionsProxy pre = op.get_preconditions();
                 EffectsProxy post = op.get_effects();
-
+                test << to_string(operator_formulas[op_index]) << " ";
                 for (size_t i = 0; i < pre.size(); ++i)
                 {
                     FactProxy f = pre[i];
                     certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
                     certificate << "&";
+                    test << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
                 }
                 for (size_t i = 0; i < post.size(); ++i)
                 {
@@ -635,6 +1126,7 @@ namespace eager_search
                     // add and del facts need to be primed -> add fact_amount
                     FactProxy f = post[i].get_fact();
                     certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount);
+                    test << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " ";
                     certificate << "&";
                     used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
 
@@ -647,32 +1139,85 @@ namespace eager_search
                             continue;
                         }
                         certificate << "!v" + to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount);
+                        test << to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " ";
                         certificate << "&";
                         used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
                     }
                 }
-                // TODO:check if "&" is appended correctly
                 bool first = true;
+                vector<int> unused_vars_formulas = vector<int>(used_vars_in_operator.size(), 0);
                 for (size_t j = 0; j < used_vars_in_operator.size(); j++)
                 {
                     if (used_vars_in_operator[j])
                     {
-                        used_vars_in_operator[j] = false;
                         continue;
                     }
                     if (!first)
                     {
                         certificate << "&";
                     }
+                    current_variable++;
+                    unused_vars_formulas[j] = current_variable;
+                    test << "-" << to_string(current_variable) << " ";
                     certificate << "(v" + to_string(j + 1 + fact_amount) + "==" + "v" + to_string(j + 1) + ")";
                     first = false;
                 }
+                test << "0\n";
                 certificate << ");\n";
-            }
+
+                used_vars_in_operator = vector<bool>(fact_amount, false);
+                for (size_t i = 0; i < pre.size(); ++i)
+                {
+                    FactProxy f = pre[i];
+                    test << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+                }
+                for (size_t i = 0; i < post.size(); ++i)
+                {
+                    if (!post[i].get_conditions().empty())
+                    {
+                        std::cout << "CONDITIONAL EFFECTS, ABORT!";
+                        certificate.close();
+                        std::remove("satproof.txt");
+                        utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
+                    }
+                    // add and del facts need to be primed -> add fact_amount
+                    FactProxy f = post[i].get_fact();
+                    test << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
+
+                    //  all other facts from this FDR variable are set to false
+                    //  TODO: can we make this more compact / smarter?
+                    for (int j = 0; j < f.get_variable().get_domain_size(); j++)
+                    {
+                        if (j == f.get_value())
+                        {
+                            continue;
+                        }
+                        test << "-" << to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+                        used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
+                    }
+                }
+                for (size_t j = 0; j < used_vars_in_operator.size(); j++)
+                {
+                    if (used_vars_in_operator[j])
+                    {
+                        continue;
+                    }
+                    if (unused_vars_formulas[j] == 0)
+                    {
+                        std::cout << "should never happen";
+                    }
+                    test << to_string(unused_vars_formulas[j]) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
+                    test << "-" << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
+                    test << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
+                    test << "-" << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
+                    test << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
+                }
+            } */
 
             // write whole formula
             // notice: it is better to use !compR instead of R
-            certificate << "f:=(cR&init)|(!cR&goal)|(!cR & cRp&(";
+            /* certificate << "f:=(cR&init)|(!cR&goal)|(!cR & cRp&(";
             for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
             {
                 certificate << "a" + to_string(op_index);
@@ -683,7 +1228,7 @@ namespace eager_search
             }
             certificate << "));\n";
             certificate << "ASSIGN f;";
-            certificate.close();
+            certificate.close(); */
         }
         else
         {
