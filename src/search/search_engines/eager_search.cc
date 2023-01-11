@@ -519,14 +519,15 @@ namespace eager_search
         bool get_reachable_facts = reachable_facts.empty();
         vector<int> facts = vector<int>(fact_amount, 0);
         // setup variables for state-formulas
-        vector<int> state_formulas = vector<int>(state_registry.size(), 0);
+        int num_states = state_registry.size();
+        vector<int> state_formulas = vector<int>(num_states, 0);
         int base = 2 * fact_amount + 1;
         if (offset != 0)
         {
-            base = base + state_registry.size();
+            base = base + num_states;
         }
 
-        for (size_t i = 0; i < state_registry.size(); i++)
+        for (size_t i = 0; i < num_states; i++)
         {
             state_formulas[i] = i + base;
         }
@@ -948,40 +949,6 @@ namespace eager_search
         {
             varorder[i] = i;
         }
-
-        /*
-          TODO: asking if the initial node is new seems wrong, but that is
-          how the search handles a dead initial state
-
-         if (search_space.get_node(state_registry.get_initial_state()).is_new())
-        {
-            const State &init_state = state_registry.get_initial_state();
-            EvaluationContext eval_context(init_state,
-                                           0,
-                                           false, &statistics);
-            std::pair<SetExpression, Judgment> deadend = open_list->get_dead_end_justification(eval_context, unsolvmgr);
-            SetExpression deadend_set = deadend.first;
-            Judgment deadend_set_dead = deadend.second;
-            SetExpression initial_set = unsolvmgr.get_initset();
-            Judgment init_subset_deadend_set = unsolvmgr.make_statement(initial_set, deadend_set, "b1");
-            Judgment init_dead = unsolvmgr.apply_rule_sd(initial_set, deadend_set_dead, init_subset_deadend_set);
-            unsolvmgr.apply_rule_ci(init_dead);
-
-            std::cout << "dumping bdds" << std::endl;
-            unsolvmgr.dump_BDDs();
-
-
-              Writing the task file at the end minimizes the chances that both task and
-              proof file are there but the planner could not finish writing them.
-
-            write_unsolvability_task_file(varorder);
-
-            double writing_end = utils::g_timer();
-            std::cout << "Time for writing unsolvability proof: "
-                      << writing_end - writing_start << std::endl;
-            return;
-        } */
-
         std::vector<std::vector<int>> fact_to_var(varorder.size(), std::vector<int>());
         std::vector<bool> used_vars_in_operator;
         int fact_amount = 0;
@@ -995,30 +962,31 @@ namespace eager_search
                 used_vars_in_operator.push_back(false);
             }
         }
-        bool whole_formula = true;
+        bool write_satproof = true;
         bool write_dimacs = true;
-
         if (write_dimacs)
         {
+            std::cout << "write output to dimacs.txt...";
             std::ofstream certificate;
             certificate.open(unsolvability_directory + "dimacs.txt");
             certificate << "p cnf 1 1\n";
-            int cR_formula = 1 + fact_amount * 2 + 2 * state_registry.size();
-            int cRp_formula = 2 + fact_amount * 2 + 2 * state_registry.size();
-            int init_formula = 3 + fact_amount * 2 + 2 * state_registry.size();
-            int goal_formula = 4 + fact_amount * 2 + 2 * state_registry.size();
+            int base = fact_amount * 2 + 2 * state_registry.size();
+            int cR_formula = 1 + base;
+            int cRp_formula = 2 + base;
+            int init_formula = 3 + base;
+            int goal_formula = 4 + base;
             map<StateID, vector<int>> reachable_facts = write_formula_dimacs(certificate, "cR", varorder, fact_to_var, 0, " ", " 0\n", "", "-", fact_amount);
             write_formula_dimacs(certificate, "cRp", varorder, fact_to_var, fact_amount, " ", " 0\n", "", "-", fact_amount, reachable_facts);
             write_init_dimacs(certificate, fact_to_var, init_formula);
             write_goal_dimacs(certificate, fact_to_var, goal_formula);
             std::tuple<vector<int>, int> tmp = write_transition_formulas_dimacs(certificate, fact_to_var, fact_amount, goal_formula);
             write_final_formula_dimacs(certificate, init_formula, cR_formula, cRp_formula, goal_formula, std::get<1>(tmp), std::get<0>(tmp));
+            std::cout << "done\n";
         }
-
-        if (whole_formula)
+        if (write_satproof)
         {
+            std::cout << "start writing to satproof.txt...";
             std::ofstream certificate;
-
             certificate.open(unsolvability_directory + "satproof.txt");
             // write compR, compR' and R formula
             certificate << "BC1.1\n";
@@ -1029,206 +997,7 @@ namespace eager_search
             write_transition_formulas(certificate, fact_to_var, fact_amount);
             write_final_formula(certificate);
             // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
-            //   write initial state formula
-
-            /* certificate << "init:=(";
-            for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
-            {
-                for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
-                {
-                    if (task_proxy.get_initial_state()[i].get_value() == j)
-                    {
-                        certificate << "v" + to_string((fact_to_var[i][j] + 1));
-                        test << "-" << to_string(fact_to_var[i][j] + 1);
-                    }
-                    else
-                    {
-                        certificate << "!v" + to_string(fact_to_var[i][j] + 1);
-                        test << to_string(fact_to_var[i][j] + 1);
-                    }
-                    test << " ";
-                    if (j != task_proxy.get_variables()[i].get_domain_size() - 1)
-                    {
-                        certificate << "&";
-                    }
-                }
-
-                if (i != task_proxy.get_variables().size() - 1)
-                {
-                    certificate << "&";
-                }
-            }
-            test << to_string(init_formula) << " 0\n";
-            certificate << ");\n";
-            for (size_t i = 0; i < task_proxy.get_variables().size(); ++i)
-            {
-                for (int j = 0; j < task_proxy.get_variables()[i].get_domain_size(); ++j)
-                {
-                    if (task_proxy.get_initial_state()[i].get_value() == j)
-                    {
-                        test << to_string(fact_to_var[i][j] + 1) << " -" << to_string(init_formula) << " 0\n";
-                    }
-                    else
-                    {
-                        test << "-" << to_string(fact_to_var[i][j] + 1) << " -" << to_string(init_formula) << " 0\n";
-                    }
-                }
-            }
-
-            // write goal formula
-            certificate << "goal:=(";
-            for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
-            {
-                FactProxy f = task_proxy.get_goals()[i];
-                certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
-                test << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
-                if (i != task_proxy.get_goals().size() - 1)
-                {
-                    certificate << "&";
-                }
-            }
-            test << to_string(goal_formula) << " 0\n";
-            certificate << ");\n";
-            for (size_t i = 0; i < task_proxy.get_goals().size(); ++i)
-            {
-                FactProxy f = task_proxy.get_goals()[i];
-                test << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " -" << to_string(goal_formula) << " 0\n";
-            }
-            int current_variable = goal_formula;
-            vector<int> operator_formulas = vector<int>(task_proxy.get_operators().size());
-            // write transition formulas
-            for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
-            {
-                used_vars_in_operator = vector<bool>(fact_amount, false);
-                current_variable++;
-                operator_formulas[op_index] = current_variable;
-                OperatorProxy op = task_proxy.get_operators()[op_index];
-                certificate << "a" + to_string(op_index) + ":=(";
-                PreconditionsProxy pre = op.get_preconditions();
-                EffectsProxy post = op.get_effects();
-                test << to_string(operator_formulas[op_index]) << " ";
-                for (size_t i = 0; i < pre.size(); ++i)
-                {
-                    FactProxy f = pre[i];
-                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1);
-                    certificate << "&";
-                    test << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " ";
-                }
-                for (size_t i = 0; i < post.size(); ++i)
-                {
-                    if (!post[i].get_conditions().empty())
-                    {
-                        std::cout << "CONDITIONAL EFFECTS, ABORT!";
-                        certificate.close();
-                        std::remove("satproof.txt");
-                        utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
-                    }
-                    // add and del facts need to be primed -> add fact_amount
-                    FactProxy f = post[i].get_fact();
-                    certificate << "v" + to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount);
-                    test << "-" << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " ";
-                    certificate << "&";
-                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
-
-                    //  all other facts from this FDR variable are set to false
-                    //  TODO: can we make this more compact / smarter?
-                    for (int j = 0; j < f.get_variable().get_domain_size(); j++)
-                    {
-                        if (j == f.get_value())
-                        {
-                            continue;
-                        }
-                        certificate << "!v" + to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount);
-                        test << to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " ";
-                        certificate << "&";
-                        used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
-                    }
-                }
-                bool first = true;
-                vector<int> unused_vars_formulas = vector<int>(used_vars_in_operator.size(), 0);
-                for (size_t j = 0; j < used_vars_in_operator.size(); j++)
-                {
-                    if (used_vars_in_operator[j])
-                    {
-                        continue;
-                    }
-                    if (!first)
-                    {
-                        certificate << "&";
-                    }
-                    current_variable++;
-                    unused_vars_formulas[j] = current_variable;
-                    test << "-" << to_string(current_variable) << " ";
-                    certificate << "(v" + to_string(j + 1 + fact_amount) + "==" + "v" + to_string(j + 1) + ")";
-                    first = false;
-                }
-                test << "0\n";
-                certificate << ");\n";
-
-                used_vars_in_operator = vector<bool>(fact_amount, false);
-                for (size_t i = 0; i < pre.size(); ++i)
-                {
-                    FactProxy f = pre[i];
-                    test << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
-                }
-                for (size_t i = 0; i < post.size(); ++i)
-                {
-                    if (!post[i].get_conditions().empty())
-                    {
-                        std::cout << "CONDITIONAL EFFECTS, ABORT!";
-                        certificate.close();
-                        std::remove("satproof.txt");
-                        utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
-                    }
-                    // add and del facts need to be primed -> add fact_amount
-                    FactProxy f = post[i].get_fact();
-                    test << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
-                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
-
-                    //  all other facts from this FDR variable are set to false
-                    //  TODO: can we make this more compact / smarter?
-                    for (int j = 0; j < f.get_variable().get_domain_size(); j++)
-                    {
-                        if (j == f.get_value())
-                        {
-                            continue;
-                        }
-                        test << "-" << to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
-                        used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
-                    }
-                }
-                for (size_t j = 0; j < used_vars_in_operator.size(); j++)
-                {
-                    if (used_vars_in_operator[j])
-                    {
-                        continue;
-                    }
-                    if (unused_vars_formulas[j] == 0)
-                    {
-                        std::cout << "should never happen";
-                    }
-                    test << to_string(unused_vars_formulas[j]) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
-                    test << "-" << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
-                    test << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
-                    test << "-" << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
-                    test << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
-                }
-            } */
-
-            // write whole formula
-            // notice: it is better to use !compR instead of R
-            /* certificate << "f:=(cR&init)|(!cR&goal)|(!cR & cRp&(";
-            for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
-            {
-                certificate << "a" + to_string(op_index);
-                if (op_index != task_proxy.get_operators().size() - 1)
-                {
-                    certificate << "|";
-                }
-            }
-            certificate << "));\n";
-            certificate << "ASSIGN f;";
-            certificate.close(); */
+            std::cout << "done";
         }
         else
         {
@@ -1270,133 +1039,6 @@ namespace eager_search
             }
             certificate.close();
         }
-
-        std::cout << "done writing SAT-proof" << std::endl;
-
-        /*
-        for (StateID id : state_registry)
-        {
-            const State &state = state_registry.lookup_state(id);
-
-            CuddBDD statebdd = CuddBDD(&manager, state);
-            if (search_space.get_node(state).is_dead_end())
-            {
-
-                dead.lor(statebdd);
-                dead_ends.push_back(id);
-
-                EvaluationContext eval_context(state,
-                                               0,
-                                               false, &statistics);
-                std::pair<SetExpression, Judgment> deadend =
-                    open_list->get_dead_end_justification(eval_context, unsolvmgr);
-                SetExpression dead_end_set = deadend.first;
-                Judgment deadend_set_dead = deadend.second;
-
-                // prove that an explicit set only containing dead end is dead
-                SetExpression state_set = unsolvmgr.define_explicit_set(fact_amount, state_registry, {id});
-                Judgment state_subset_dead_end_set = unsolvmgr.make_statement(state_set, dead_end_set, "b4");
-                Judgment state_dead = unsolvmgr.apply_rule_sd(state_set, deadend_set_dead, state_subset_dead_end_set);
-                merge_tree[mt_pos].set = state_set;
-                merge_tree[mt_pos].justification = state_dead;
-                merge_tree[mt_pos].de_pos_begin = dead_ends.size() - 1;
-                merge_tree[mt_pos].depth = 0;
-                mt_pos++;
-
-                // merge the last 2 sets to a new one if they have the same depth in the merge tree
-                while (mt_pos > 1 && merge_tree[mt_pos - 1].depth == merge_tree[mt_pos - 2].depth)
-                {
-                    MergeTreeEntry &mte_left = merge_tree[mt_pos - 2];
-                    MergeTreeEntry &mte_right = merge_tree[mt_pos - 1];
-
-                    // show that implicit union between the two sets is dead
-                    SetExpression implicit_union = unsolvmgr.define_set_union(mte_left.set, mte_right.set);
-                    Judgment implicit_union_dead = unsolvmgr.apply_rule_ud(implicit_union, mte_left.justification, mte_right.justification);
-
-                    // the left entry represents the merged entry while the right entry will be considered deleted
-                    mte_left.depth++;
-                    mte_left.set = implicit_union;
-                    mte_left.justification = implicit_union_dead;
-                    mt_pos--;
-                }
-            }
-            else if (search_space.get_node(state).is_closed())
-            {
-                expanded.lor(statebdd);
-            }
-            // TODO: this point of the code should never be reached, right? (either its a dead-end or closed)
-
-        }
-
-        std::vector<CuddBDD> bdds;
-        SetExpression dead_end_set;
-        Judgment deadends_dead;
-
-        // no dead ends --> use empty set
-        if (dead_ends.size() == 0)
-        {
-            dead_end_set = unsolvmgr.get_emptyset();
-            deadends_dead = unsolvmgr.apply_rule_ed();
-        }
-        else
-        {
-            // if the merge tree is not a complete binary tree, we first need to shrink it up to size 1
-            // TODO: this is copy paste from above...
-            while (mt_pos > 1)
-            {
-                MergeTreeEntry &mte_left = merge_tree[mt_pos - 2];
-                MergeTreeEntry &mte_right = merge_tree[mt_pos - 1];
-
-                // show that implicit union between the two sets is dead
-                SetExpression implicit_union = unsolvmgr.define_set_union(mte_left.set, mte_right.set);
-                Judgment implicit_union_dead = unsolvmgr.apply_rule_ud(implicit_union, mte_left.justification, mte_right.justification);
-                mt_pos--;
-                merge_tree[mt_pos - 1].depth++;
-                merge_tree[mt_pos - 1].set = implicit_union;
-                merge_tree[mt_pos - 1].justification = implicit_union_dead;
-            }
-            bdds.push_back(dead);
-
-            // build an explicit set containing all dead ends
-            SetExpression all_dead_ends = unsolvmgr.define_explicit_set(fact_amount, state_registry, dead_ends);
-            // show that all_de_explicit is a subset to the union of all dead ends and thus dead
-            Judgment expl_deadends_subset = unsolvmgr.make_statement(all_dead_ends, merge_tree[0].set, "b1");
-            Judgment expl_deadends_dead = unsolvmgr.apply_rule_sd(all_dead_ends, merge_tree[0].justification, expl_deadends_subset);
-            // show that the bdd containing all dead ends is a subset to the explicit set containing all dead ends
-            SetExpression dead_ends_bdd = unsolvmgr.define_bdd(bdds[bdds.size() - 1]);
-            Judgment bdd_subset_explicit = unsolvmgr.make_statement(dead_ends_bdd, all_dead_ends, "b4");
-            Judgment bdd_dead = unsolvmgr.apply_rule_sd(dead_ends_bdd, expl_deadends_dead, bdd_subset_explicit);
-
-            dead_end_set = dead_ends_bdd;
-            deadends_dead = bdd_dead;
-        }
-
-        bdds.push_back(expanded);
-
-        // show that expanded states only lead to themselves and dead states
-        SetExpression expanded_set = unsolvmgr.define_bdd(bdds[bdds.size() - 1]);
-        SetExpression expanded_progressed = unsolvmgr.define_set_progression(expanded_set, 0);
-        SetExpression expanded_union_dead = unsolvmgr.define_set_union(expanded_set, dead_end_set);
-        SetExpression goal_set = unsolvmgr.get_goalset();
-        SetExpression goal_intersection = unsolvmgr.define_set_intersection(expanded_set, goal_set);
-
-        Judgment empty_dead = unsolvmgr.apply_rule_ed();
-        Judgment progression_to_deadends = unsolvmgr.make_statement(expanded_progressed, expanded_union_dead, "b2");
-        Judgment goal_intersection_empty = unsolvmgr.make_statement(goal_intersection, unsolvmgr.get_emptyset(), "b1");
-        Judgment goal_intersection_dead = unsolvmgr.apply_rule_sd(goal_intersection, empty_dead, goal_intersection_empty);
-        Judgment expanded_dead = unsolvmgr.apply_rule_pg(expanded_set, progression_to_deadends, deadends_dead, goal_intersection_dead);
-
-        Judgment init_in_expanded = unsolvmgr.make_statement(unsolvmgr.get_initset(), expanded_set, "b1");
-        Judgment init_dead = unsolvmgr.apply_rule_sd(unsolvmgr.get_initset(), expanded_dead, init_in_expanded);
-        unsolvmgr.apply_rule_ci(init_dead);
-
-        std::cout << "dumping bdds" << std::endl;
-
-        unsolvmgr.dump_BDDs();
-
-        std::cout << "done dumping bdds" << std::endl;
-        */
-
         /*
           Writing the task file at the end minimizes the chances that both task and
           proof file are there but the planner could not finish writing them.
