@@ -962,8 +962,9 @@ namespace eager_search
                 used_vars_in_operator.push_back(false);
             }
         }
-        bool write_satproof = true;
+        bool write_satproof = false;
         bool write_dimacs = true;
+        bool write_inductive = false;
         if (write_dimacs)
         {
             std::cout << "write output to dimacs.txt...";
@@ -999,7 +1000,7 @@ namespace eager_search
             // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
             std::cout << "done";
         }
-        else
+        if (write_inductive)
         {
             std::ofstream certificate;
             certificate.open(unsolvability_directory + "satproof.txt");
