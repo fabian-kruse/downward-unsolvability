@@ -80,7 +80,7 @@ namespace eager_search
             {
                 CuddManager::set_compact_proof(false);
             }
-            else if (unsolv_type == UnsolvabilityVerificationType::PROOF)
+            else if (unsolv_type == UnsolvabilityVerificationType::PROOF || unsolv_type == UnsolvabilityVerificationType::DIMACS)
             {
                 CuddManager::set_compact_proof(true);
             }
@@ -145,7 +145,8 @@ namespace eager_search
         if (open_list->is_dead_end(eval_context))
         {
             if (unsolv_type == UnsolvabilityVerificationType::PROOF ||
-                unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD)
+                unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD ||
+                unsolv_type == UnsolvabilityVerificationType::DIMACS)
             {
                 open_list->store_deadend_info(eval_context);
             }
@@ -182,7 +183,8 @@ namespace eager_search
             if (open_list->empty())
             {
                 if (unsolv_type == UnsolvabilityVerificationType::PROOF ||
-                    unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD)
+                    unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD ||
+                    unsolv_type == UnsolvabilityVerificationType::DIMACS)
                 {
                     write_unsolvability_proof();
                 }
@@ -308,7 +310,8 @@ namespace eager_search
                 if (open_list->is_dead_end(succ_eval_context))
                 {
                     if (unsolv_type == UnsolvabilityVerificationType::PROOF ||
-                        unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD)
+                        unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD ||
+                        unsolv_type == UnsolvabilityVerificationType::DIMACS)
                     {
                         open_list->store_deadend_info(succ_eval_context);
                     }
@@ -963,8 +966,17 @@ namespace eager_search
             }
         }
         bool write_satproof = false;
-        bool write_dimacs = true;
+        bool write_dimacs = false;
         bool write_inductive = false;
+        if (unsolv_type == UnsolvabilityVerificationType::DIMACS)
+        {
+            write_dimacs = true;
+        }
+        else if (unsolv_type == UnsolvabilityVerificationType::PROOF)
+        {
+            write_satproof = true;
+        }
+
         if (write_dimacs)
         {
             std::cout << "write output to dimacs.txt...";

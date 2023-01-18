@@ -24,7 +24,8 @@ using utils::ExitCode;
 
 class PruningMethod;
 
-successor_generator::SuccessorGenerator &get_successor_generator(const TaskProxy &task_proxy) {
+successor_generator::SuccessorGenerator &get_successor_generator(const TaskProxy &task_proxy)
+{
     utils::g_log << "Building successor generator..." << flush;
     int peak_memory_before = utils::get_peak_memory_in_kb();
     utils::Timer successor_generator_timer;
@@ -54,8 +55,10 @@ SearchEngine::SearchEngine(const Options &opts)
       cost_type(opts.get<OperatorCost>("cost_type")),
       is_unit_cost(task_properties::is_unit_cost(task_proxy)),
       max_time(opts.get<double>("max_time")),
-      verbosity(opts.get<utils::Verbosity>("verbosity")) {
-    if (opts.get<int>("bound") < 0) {
+      verbosity(opts.get<utils::Verbosity>("verbosity"))
+{
+    if (opts.get<int>("bound") < 0)
+    {
         cerr << "error: negative cost bound " << opts.get<int>("bound") << endl;
         utils::exit_with(ExitCode::SEARCH_INPUT_ERROR);
     }
@@ -63,33 +66,41 @@ SearchEngine::SearchEngine(const Options &opts)
     task_properties::print_variable_statistics(task_proxy);
 }
 
-SearchEngine::~SearchEngine() {
+SearchEngine::~SearchEngine()
+{
 }
 
-bool SearchEngine::found_solution() const {
+bool SearchEngine::found_solution() const
+{
     return solution_found;
 }
 
-SearchStatus SearchEngine::get_status() const {
+SearchStatus SearchEngine::get_status() const
+{
     return status;
 }
 
-const Plan &SearchEngine::get_plan() const {
+const Plan &SearchEngine::get_plan() const
+{
     assert(solution_found);
     return plan;
 }
 
-void SearchEngine::set_plan(const Plan &p) {
+void SearchEngine::set_plan(const Plan &p)
+{
     solution_found = true;
     plan = p;
 }
 
-void SearchEngine::search() {
+void SearchEngine::search()
+{
     initialize();
     utils::CountdownTimer timer(max_time);
-    while (status == IN_PROGRESS) {
+    while (status == IN_PROGRESS)
+    {
         status = step();
-        if (timer.is_expired()) {
+        if (timer.is_expired())
+        {
             utils::g_log << "Time limit reached. Abort search." << endl;
             status = TIMEOUT;
             break;
@@ -99,8 +110,10 @@ void SearchEngine::search() {
     utils::g_log << "Actual search time: " << timer.get_elapsed_time() << endl;
 }
 
-bool SearchEngine::check_goal_and_set_plan(const State &state) {
-    if (task_properties::is_goal_state(task_proxy, state)) {
+bool SearchEngine::check_goal_and_set_plan(const State &state)
+{
+    if (task_properties::is_goal_state(task_proxy, state))
+    {
         utils::g_log << "Solution found!" << endl;
         Plan plan;
         search_space.trace_path(state, plan);
@@ -110,13 +123,16 @@ bool SearchEngine::check_goal_and_set_plan(const State &state) {
     return false;
 }
 
-void SearchEngine::save_plan_if_necessary() {
-    if (found_solution()) {
+void SearchEngine::save_plan_if_necessary()
+{
+    if (found_solution())
+    {
         plan_manager.save_plan(get_plan(), task_proxy);
     }
 }
 
-int SearchEngine::get_adjusted_cost(const OperatorProxy &op) const {
+int SearchEngine::get_adjusted_cost(const OperatorProxy &op) const
+{
     return get_adjusted_action_cost(op, cost_type, is_unit_cost);
 }
 
@@ -125,7 +141,8 @@ int SearchEngine::get_adjusted_cost(const OperatorProxy &op) const {
 
    Method doesn't belong here because it's only useful for certain derived classes.
    TODO: Figure out where it belongs and move it there. */
-void SearchEngine::add_pruning_option(OptionParser &parser) {
+void SearchEngine::add_pruning_option(OptionParser &parser)
+{
     parser.add_option<shared_ptr<PruningMethod>>(
         "pruning",
         "Pruning methods can prune or reorder the set of applicable operators in "
@@ -134,12 +151,14 @@ void SearchEngine::add_pruning_option(OptionParser &parser) {
         "null()");
 }
 
-void SearchEngine::add_options_to_parser(OptionParser &parser) {
+void SearchEngine::add_options_to_parser(OptionParser &parser)
+{
     ::add_cost_type_option_to_parser(parser);
     parser.add_option<int>(
         "bound",
         "exclusive depth bound on g-values. Cutoffs are always performed according to "
-        "the real cost, regardless of the cost_type parameter", "infinity");
+        "the real cost, regardless of the cost_type parameter",
+        "infinity");
     parser.add_option<double>(
         "max_time",
         "maximum time in seconds the search is allowed to run for. The "
@@ -154,7 +173,8 @@ void SearchEngine::add_options_to_parser(OptionParser &parser) {
 
 /* Method doesn't belong here because it's only useful for certain derived classes.
    TODO: Figure out where it belongs and move it there. */
-void SearchEngine::add_succ_order_options(OptionParser &parser) {
+void SearchEngine::add_succ_order_options(OptionParser &parser)
+{
     vector<string> options;
     parser.add_option<bool>(
         "randomize_successors",
@@ -172,16 +192,18 @@ void SearchEngine::add_succ_order_options(OptionParser &parser) {
     utils::add_rng_options(parser);
 }
 
-void SearchEngine::add_unsolvability_options(OptionParser &parser) {
+void SearchEngine::add_unsolvability_options(OptionParser &parser)
+{
     vector<string> verification_types;
     verification_types.push_back("NONE");
     verification_types.push_back("PROOF");
     verification_types.push_back("PROOF_DISCARD");
+    verification_types.push_back("DIMACS");
     parser.add_enum_option<UnsolvabilityVerificationType>(
-                "unsolv_verification",
-                verification_types,
-                "type of unsolvability verification",
-                "NONE");
+        "unsolv_verification",
+        verification_types,
+        "type of unsolvability verification",
+        "NONE");
     parser.add_option<std::string>(
         "unsolv_directory",
         "The directory in which the unsolvability verification should be written."
@@ -189,14 +211,16 @@ void SearchEngine::add_unsolvability_options(OptionParser &parser) {
         ".");
 }
 
-void print_initial_evaluator_values(const EvaluationContext &eval_context) {
+void print_initial_evaluator_values(const EvaluationContext &eval_context)
+{
     eval_context.get_cache().for_each_evaluator_result(
-        [] (const Evaluator *eval, const EvaluationResult &result) {
-            if (eval->is_used_for_reporting_minima()) {
+        [](const Evaluator *eval, const EvaluationResult &result)
+        {
+            if (eval->is_used_for_reporting_minima())
+            {
                 eval->report_value_for_initial_state(result);
             }
-        }
-        );
+        });
 }
 
 static PluginTypePlugin<SearchEngine> _type_plugin(
@@ -207,9 +231,12 @@ static PluginTypePlugin<SearchEngine> _type_plugin(
 void collect_preferred_operators(
     EvaluationContext &eval_context,
     Evaluator *preferred_operator_evaluator,
-    ordered_set::OrderedSet<OperatorID> &preferred_operators) {
-    if (!eval_context.is_evaluator_value_infinite(preferred_operator_evaluator)) {
-        for (OperatorID op_id : eval_context.get_preferred_operators(preferred_operator_evaluator)) {
+    ordered_set::OrderedSet<OperatorID> &preferred_operators)
+{
+    if (!eval_context.is_evaluator_value_infinite(preferred_operator_evaluator))
+    {
+        for (OperatorID op_id : eval_context.get_preferred_operators(preferred_operator_evaluator))
+        {
             preferred_operators.insert(op_id);
         }
     }
