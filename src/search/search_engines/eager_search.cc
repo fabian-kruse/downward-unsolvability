@@ -965,19 +965,8 @@ namespace eager_search
                 used_vars_in_operator.push_back(false);
             }
         }
-        bool write_satproof = false;
-        bool write_dimacs = false;
-        bool write_inductive = false;
-        if (unsolv_type == UnsolvabilityVerificationType::DIMACS)
-        {
-            write_dimacs = true;
-        }
-        else if (unsolv_type == UnsolvabilityVerificationType::PROOF)
-        {
-            write_satproof = true;
-        }
 
-        if (write_dimacs)
+        if (unsolv_type == UnsolvabilityVerificationType::DIMACS)
         {
             std::cout << "write output to dimacs.txt...";
             std::ofstream certificate;
@@ -996,7 +985,7 @@ namespace eager_search
             write_final_formula_dimacs(certificate, init_formula, cR_formula, cRp_formula, goal_formula, std::get<1>(tmp), std::get<0>(tmp));
             std::cout << "done\n";
         }
-        if (write_satproof)
+        if (unsolv_type == UnsolvabilityVerificationType::PROOF)
         {
             std::cout << "start writing to satproof.txt...";
             std::ofstream certificate;
@@ -1012,6 +1001,7 @@ namespace eager_search
             // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
             std::cout << "done";
         }
+        bool write_inductive = false;
         if (write_inductive)
         {
             std::ofstream certificate;
