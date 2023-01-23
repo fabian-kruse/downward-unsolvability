@@ -199,6 +199,7 @@ void SearchEngine::add_unsolvability_options(OptionParser &parser)
     verification_types.push_back("PROOF");
     verification_types.push_back("PROOF_DISCARD");
     verification_types.push_back("DIMACS");
+    verification_types.push_back("MAIN");
     parser.add_enum_option<UnsolvabilityVerificationType>(
         "unsolv_verification",
         verification_types,

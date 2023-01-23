@@ -47,7 +47,8 @@ enum class UnsolvabilityVerificationType
     NONE,
     PROOF,
     PROOF_DISCARD,
-    DIMACS
+    DIMACS,
+    MAIN
 };
 
 class SearchEngine

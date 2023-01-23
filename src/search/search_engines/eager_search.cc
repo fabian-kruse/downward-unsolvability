@@ -80,7 +80,7 @@ namespace eager_search
             {
                 CuddManager::set_compact_proof(false);
             }
-            else if (unsolv_type == UnsolvabilityVerificationType::PROOF || unsolv_type == UnsolvabilityVerificationType::DIMACS)
+            else if (unsolv_type == UnsolvabilityVerificationType::PROOF || unsolv_type == UnsolvabilityVerificationType::DIMACS || unsolv_type == UnsolvabilityVerificationType::MAIN)
             {
                 CuddManager::set_compact_proof(true);
             }
@@ -146,7 +146,8 @@ namespace eager_search
         {
             if (unsolv_type == UnsolvabilityVerificationType::PROOF ||
                 unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD ||
-                unsolv_type == UnsolvabilityVerificationType::DIMACS)
+                unsolv_type == UnsolvabilityVerificationType::DIMACS ||
+                unsolv_type == UnsolvabilityVerificationType::MAIN)
             {
                 open_list->store_deadend_info(eval_context);
             }
@@ -184,7 +185,8 @@ namespace eager_search
             {
                 if (unsolv_type == UnsolvabilityVerificationType::PROOF ||
                     unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD ||
-                    unsolv_type == UnsolvabilityVerificationType::DIMACS)
+                    unsolv_type == UnsolvabilityVerificationType::DIMACS ||
+                    unsolv_type == UnsolvabilityVerificationType::MAIN)
                 {
                     write_unsolvability_proof();
                 }
@@ -311,7 +313,8 @@ namespace eager_search
                 {
                     if (unsolv_type == UnsolvabilityVerificationType::PROOF ||
                         unsolv_type == UnsolvabilityVerificationType::PROOF_DISCARD ||
-                        unsolv_type == UnsolvabilityVerificationType::DIMACS)
+                        unsolv_type == UnsolvabilityVerificationType::DIMACS ||
+                        unsolv_type == UnsolvabilityVerificationType::MAIN)
                     {
                         open_list->store_deadend_info(succ_eval_context);
                     }
@@ -1001,11 +1004,10 @@ namespace eager_search
             // write_formula(certificate, "R", varorder, fact_to_var, 0, "&", "|", "!", "", reachable_facts);
             std::cout << "done";
         }
-        bool write_inductive = false;
-        if (write_inductive)
+        if (unsolv_type == UnsolvabilityVerificationType::MAIN)
         {
             std::ofstream certificate;
-            certificate.open(unsolvability_directory + "satproof.txt");
+            certificate.open(unsolvability_directory + "mainproof.txt");
             certificate << "c main proof file\n"
                            "c this file contains the backwards inductive certificate\n"
                            "p cnf " +
