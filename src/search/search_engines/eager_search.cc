@@ -790,6 +790,7 @@ namespace eager_search
                                                                                int current_variable)
     {
         vector<int> operator_formulas = vector<int>(task_proxy.get_operators().size());
+        vector<int> fact_correspondence_formulas = vector<int>(fact_amount, 0);
         // write transition formulas
         for (size_t op_index = 0; op_index < task_proxy.get_operators().size(); ++op_index)
         {
@@ -811,7 +812,7 @@ namespace eager_search
                 {
                     std::cout << "CONDITIONAL EFFECTS, ABORT!";
                     certificate.close();
-                    std::remove("satproof.txt");
+                    std::remove("dimacs.txt");
                     utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
                 }
                 // add and del facts need to be primed -> add fact_amount
@@ -831,19 +832,22 @@ namespace eager_search
                     used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
                 }
             }
-            vector<int> unused_vars_formulas = vector<int>(used_vars_in_operator.size(), 0);
+
             for (size_t j = 0; j < used_vars_in_operator.size(); j++)
             {
                 if (used_vars_in_operator[j])
                 {
                     continue;
                 }
-                current_variable++;
-                unused_vars_formulas[j] = current_variable;
-                certificate << "-" << to_string(current_variable) << " ";
+                if (fact_correspondence_formulas[j] == 0)
+                {
+                    current_variable++;
+                    fact_correspondence_formulas[j] = current_variable;
+                }
+                certificate << "-" << to_string(fact_correspondence_formulas[j]) << " ";
             }
             certificate << "0\n";
-            used_vars_in_operator = vector<bool>(fact_amount, false);
+
             for (size_t i = 0; i < pre.size(); ++i)
             {
                 FactProxy f = pre[i];
@@ -855,13 +859,12 @@ namespace eager_search
                 {
                     std::cout << "CONDITIONAL EFFECTS, ABORT!";
                     certificate.close();
-                    std::remove("satproof.txt");
+                    std::remove("dimacs.txt");
                     utils::exit_with(utils::ExitCode::SEARCH_CRITICAL_ERROR);
                 }
                 // add and del facts need to be primed -> add fact_amount
                 FactProxy f = post[i].get_fact();
                 certificate << to_string(fact_to_var[f.get_variable().get_id()][f.get_value()] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
-                used_vars_in_operator[fact_to_var[f.get_variable().get_id()][f.get_value()]] = true;
 
                 //  all other facts from this FDR variable are set to false
                 //  TODO: can we make this more compact / smarter?
@@ -872,24 +875,22 @@ namespace eager_search
                         continue;
                     }
                     certificate << "-" << to_string(fact_to_var[f.get_variable().get_id()][j] + 1 + fact_amount) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
-                    used_vars_in_operator[fact_to_var[f.get_variable().get_id()][j]] = true;
                 }
             }
-            for (size_t j = 0; j < used_vars_in_operator.size(); j++)
+        }
+        for (int j = 0; j < fact_amount; j++)
+        {
+            if (fact_correspondence_formulas[j] != 0)
             {
-                if (used_vars_in_operator[j])
-                {
-                    continue;
-                }
-                if (unused_vars_formulas[j] == 0)
-                {
-                    std::cout << "should never happen";
-                }
-                certificate << to_string(unused_vars_formulas[j]) << " -" << to_string(operator_formulas[op_index]) << " 0\n";
-                certificate << "-" << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
-                certificate << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " " << to_string(unused_vars_formulas[j]) << " 0\n";
-                certificate << "-" << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
-                certificate << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " -" << to_string(unused_vars_formulas[j]) << " 0\n";
+                certificate << "-" << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " " << to_string(fact_correspondence_formulas[j]) << " 0\n";
+                certificate << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " " << to_string(fact_correspondence_formulas[j]) << " 0\n";
+                certificate << "-" << to_string(j + 1) << " " << to_string(j + 1 + fact_amount) << " -" << to_string(fact_correspondence_formulas[j]) << " 0\n";
+                certificate << to_string(j + 1) << " -" << to_string(j + 1 + fact_amount) << " -" << to_string(fact_correspondence_formulas[j]) << " 0\n";
+                certificate << to_string(fact_correspondence_formulas[j]) << " 0\n";
+            }
+            else
+            {
+                std::cout << "no correspondence formula for fact " << j << " found! " << std::endl;
             }
         }
         return make_tuple(operator_formulas, current_variable);
